@@ -28,6 +28,52 @@ def calcular_pdf_normal(numeros):
     pdf = norm.pdf(x, loc=media, scale=std_dev)
     return x, pdf
 
+def importar_txt():
+    file_path = filedialog.askopenfilename(
+        title="Importar arquivo TXT",
+        filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")]
+    )
+    if not file_path:
+        return
+    try:
+        df = pd.read_csv(file_path, header=None)
+        numeros = pd.to_numeric(df.iloc[:, 0], errors='coerce').dropna().tolist()
+        if not numeros:
+            raise ValueError("Nenhum valor numérico encontrado no arquivo.")
+        process_numeros(numeros, "Números importados (TXT)")
+    except Exception as e:
+        for item in tree.get_children():
+            tree.delete(item)
+        tree.insert('', 'end', values=('Erro', str(e)))
+        for widget in tab_hist.winfo_children():
+            widget.destroy()
+
+def importar_excel():
+    file_path = filedialog.askopenfilename(
+        title="Importar arquivo Excel",
+        filetypes=[("Excel Files", "*.xls;*.xlsx"), ("All Files", "*.*")]
+    )
+    if not file_path:
+        return
+    try:
+        df = pd.read_excel(file_path)
+        # Procura a primeira coluna com dados numéricos
+        numeros = None
+        for col in df.columns:
+            temp = pd.to_numeric(df[col], errors='coerce').dropna().tolist()
+            if temp:
+                numeros = temp
+                break
+        if not numeros:
+            raise ValueError("Nenhum valor numérico encontrado no arquivo.")
+        process_numeros(numeros, "Números importados (Excel)")
+    except Exception as e:
+        for item in tree.get_children():
+            tree.delete(item)
+        tree.insert('', 'end', values=('Erro', str(e)))
+        for widget in tab_hist.winfo_children():
+            widget.destroy()
+
 def plot_histograms(numeros):
     global last_numbers
     last_numbers = numeros
@@ -107,55 +153,13 @@ def gerar_numeros_aleatorios():
         for widget in tab_hist.winfo_children():
             widget.destroy()
 
-def importar_txt():
-    file_path = filedialog.askopenfilename(
-        title="Importar arquivo TXT",
-        filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")]
-    )
-    if not file_path:
-        return
-    try:
-        df = pd.read_csv(file_path, header=None)
-        numeros = pd.to_numeric(df.iloc[:, 0], errors='coerce').dropna().tolist()
-        if not numeros:
-            raise ValueError("Nenhum valor numérico encontrado no arquivo.")
-        process_numeros(numeros, "Números importados (TXT)")
-    except Exception as e:
-        for item in tree.get_children():
-            tree.delete(item)
-        tree.insert('', 'end', values=('Erro', str(e)))
-        for widget in tab_hist.winfo_children():
-            widget.destroy()
-
-def importar_excel():
-    file_path = filedialog.askopenfilename(
-        title="Importar arquivo Excel",
-        filetypes=[("Excel Files", "*.xls;*.xlsx"), ("All Files", "*.*")]
-    )
-    if not file_path:
-        return
-    try:
-        df = pd.read_excel(file_path)
-        # Procura a primeira coluna com dados numéricos
-        numeros = None
-        for col in df.columns:
-            temp = pd.to_numeric(df[col], errors='coerce').dropna().tolist()
-            if temp:
-                numeros = temp
-                break
-        if not numeros:
-            raise ValueError("Nenhum valor numérico encontrado no arquivo.")
-        process_numeros(numeros, "Números importados (Excel)")
-    except Exception as e:
-        for item in tree.get_children():
-            tree.delete(item)
-        tree.insert('', 'end', values=('Erro', str(e)))
-        for widget in tab_hist.winfo_children():
-            widget.destroy()
-
 def plot_histograma_replot():
     global last_numbers
-    for widget in frame_plot_hist.winfo_children():
+    try:
+        children = frame_plot_hist.winfo_children()
+    except tk.TclError:
+        return
+    for widget in children:
         widget.destroy()
     
     if last_numbers is None:
