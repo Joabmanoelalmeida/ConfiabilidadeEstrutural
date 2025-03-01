@@ -129,11 +129,11 @@ def process_numeros(numeros, descricao):
         tree.delete(item)
     
     tree.insert('', 'end', values=(descricao, str(numeros)))
-    tree.insert('', 'end', values=('Média (calculada)', f"{media_calculada:.2f}"))
-    tree.insert('', 'end', values=('Variância', f"{variancia:.2f}"))
-    tree.insert('', 'end', values=('Desvio Padrão (calculado)', f"{desvio_padrao_calculado:.2f}"))
-    tree.insert('', 'end', values=('Coeficiente de Skewness', f"{skewness:.2f}"))
-    tree.insert('', 'end', values=('Coeficiente de Kurtosis', f"{kurt:.2f}"))
+    tree.insert('', 'end', values=('Média (calculada)', f"{media_calculada:.4f}"))
+    tree.insert('', 'end', values=('Variância', f"{variancia:.4f}"))
+    tree.insert('', 'end', values=('Desvio Padrão (calculado)', f"{desvio_padrao_calculado:.4f}"))
+    tree.insert('', 'end', values=('Coeficiente de Skewness', f"{skewness:.4f}"))
+    tree.insert('', 'end', values=('Coeficiente de Kurtosis', f"{kurt:.4f}"))
     
     plot_histograms(numeros)
 
