@@ -1,4 +1,4 @@
-from scipy.stats import tmean, tvar, tstd, norm
+from scipy.stats import tmean, tvar, tstd, norm, lognorm
 import tkinter as tk
 from tkinter import ttk, filedialog
 import os
@@ -28,6 +28,35 @@ def calcular_pdf_normal(numeros):
     pdf = norm.pdf(x, loc=media, scale=std_dev)
     return x, pdf
 
+def calcular_pdf_lognormal(numeros):
+    numeros_pos = [x for x in numeros if x > 0]
+    if not numeros_pos:
+        return None, None
+    logs = np.log(numeros_pos)
+    media_log = tmean(logs)
+    desvio_log = tstd(logs)
+    x = np.linspace(min(numeros_pos), max(numeros_pos), 200)
+    pdf = lognorm.pdf(x, s=desvio_log, scale=np.exp(media_log))
+    return x, pdf
+
+def calcular_cdf_normal(numeros):
+    media = tmean(numeros)
+    std_dev = tstd(numeros)
+    x = np.linspace(min(numeros), max(numeros), 200)
+    cdf = norm.cdf(x, loc=media, scale=std_dev)
+    return x, cdf
+
+def calcular_cdf_lognormal(numeros):
+    numeros_pos = [x for x in numeros if x > 0]
+    if not numeros_pos:
+        return None, None
+    logs = np.log(numeros_pos)
+    media_log = tmean(logs)
+    desvio_log = tstd(logs)
+    x = np.linspace(min(numeros_pos), max(numeros_pos), 200)
+    cdf = lognorm.cdf(x, s=desvio_log, scale=np.exp(media_log))
+    return x, cdf
+
 def importar_txt():
     file_path = filedialog.askopenfilename(
         title="Importar arquivo TXT",
@@ -45,7 +74,7 @@ def importar_txt():
         for item in tree.get_children():
             tree.delete(item)
         tree.insert('', 'end', values=('Erro', str(e)))
-        for widget in tab_hist.winfo_children():
+        for widget in frame_plot_hist.winfo_children():
             widget.destroy()
 
 def importar_excel():
@@ -71,54 +100,61 @@ def importar_excel():
         for item in tree.get_children():
             tree.delete(item)
         tree.insert('', 'end', values=('Erro', str(e)))
-        for widget in tab_hist.winfo_children():
+        for widget in frame_plot_hist.winfo_children():
             widget.destroy()
 
-def plot_histograms(numeros):
+# A nova função unificada que plota PDF ou CDF na aba Histograma
+def plot_histograma_replot():
     global last_numbers
-    last_numbers = numeros
+    try:
+        for widget in frame_plot_hist.winfo_children():
+            widget.destroy()
+    except tk.TclError:
+        return
 
-    for widget in tab_hist.winfo_children():
-        if widget == frame_controls_hist:
-            continue
-        widget.destroy()
+    if last_numbers is None:
+        lbl = ttk.Label(frame_plot_hist, text="Nenhum conjunto de dados disponível.", foreground="red")
+        lbl.pack()
+        return
 
-    canvas_frame = ttk.Frame(tab_hist, padding=10, style="Card.TFrame")
-    canvas_frame.pack(fill="both", expand=True, padx=20, pady=20)
+    opcao = opcao_hist.get()
+    fig, ax = plt.subplots(figsize=(8, 6))
 
-    placeholder = tk.Canvas(canvas_frame, background="gray")
-    placeholder.pack(fill="both", expand=True)
-
-    def draw_histogram():
-        placeholder.destroy()
-        bins = get_histogram_bins(numeros)  
-        counts, bins_array = np.histogram(numeros, bins=bins)
+    if opcao == "PDF":
+        try:
+            bins = int(entry_bins_hist.get())
+        except ValueError:
+            bins = get_histogram_bins(last_numbers)
+        counts, bins_array = np.histogram(last_numbers, bins=bins)
         bin_widths = np.diff(bins_array)
         rel_freq = counts / counts.sum()
         density = rel_freq / bin_widths
 
-        fig, ax = plt.subplots(figsize=(5, 7))
-        ax.bar(bins_array[:-1], density, width=bin_widths, align='edge', edgecolor='black', color='#4C72B0')
-        
-        # Plot the normal PDF on top of the histogram
-        x, pdf = calcular_pdf_normal(numeros)
+        ax.bar(bins_array[:-1], density, width=bin_widths, align='edge', edgecolor='black')
+        # Plot da PDF normal sobre o histograma
+        x, pdf = calcular_pdf_normal(last_numbers)
         ax.plot(x, pdf, color='red', linewidth=2, label='PDF')
         ax.legend()
-
-        ax.set_title("Histograma de Densidade de Probabilidade", fontsize=12, fontweight='bold')
-        ax.set_xlabel(f"Valor\nCestas: {len(bins_array)-1}", fontsize=10)  
-        ax.set_ylabel("Densidade", fontsize=10)
+        ax.set_title("Histograma de Densidade de Probabilidade (PDF)")
+        ax.set_xlabel(f"Valor\nCestas: {len(bins_array)-1}")
+        ax.set_ylabel("Densidade")
         ax.set_xlim(bins_array[0], bins_array[-1])
+    else:  # opcao == "CDF"
+        x, cdf_values = calcular_cdf_normal(last_numbers)
+        ax.plot(x, cdf_values, color='purple', linewidth=2, label='CDF')
+        ax.legend()
+        ax.set_title("Curva de Distribuição Acumulada (CDF)")
+        ax.set_xlabel("Valor")
+        ax.set_ylabel("Probabilidade Acumulada")
         ax.grid(True, linestyle='--', alpha=0.6)
-        plt.tight_layout()
 
-        canvas = FigureCanvasTkAgg(fig, master=canvas_frame)
-        canvas.get_tk_widget().pack(fill="both", expand=True)
-        canvas.draw()
-
-    canvas_frame.after(500, draw_histogram)
+    plt.tight_layout()
+    canvas = FigureCanvasTkAgg(fig, master=frame_plot_hist)
+    canvas.draw()
+    canvas.get_tk_widget().pack(fill="both", expand=True)
 
 def process_numeros(numeros, descricao):
+    global last_numbers
     media_calculada = tmean(numeros)
     variancia = tvar(numeros)
     desvio_padrao_calculado = tstd(numeros)
@@ -135,7 +171,8 @@ def process_numeros(numeros, descricao):
     tree.insert('', 'end', values=('Coeficiente de Skewness', f"{skewness:.4f}"))
     tree.insert('', 'end', values=('Coeficiente de Kurtosis', f"{kurt:.4f}"))
     
-    plot_histograms(numeros)
+    last_numbers = numeros
+    plot_histograma_replot()
 
 def gerar_numeros_aleatorios():
     try:
@@ -143,51 +180,79 @@ def gerar_numeros_aleatorios():
         media_informada = float(entry_media.get()) if entry_media.get() else 0  
         desvio_informado = float(entry_desvio.get()) if entry_desvio.get() else 1
         
-        numeros = norm.rvs(loc=media_informada, scale=desvio_informado, size=quantidade).tolist()
-        process_numeros(numeros, "Números gerados")
+        # Gerar amostra com distribuição normal
+        numeros_normal = norm.rvs(loc=media_informada, scale=desvio_informado, size=quantidade).tolist()
+        process_numeros(numeros_normal, "Números gerados (Normal)")
+        
+        # Gerar amostra com distribuição lognormal
+        numeros_lognormal = lognorm.rvs(s=desvio_informado, scale=np.exp(media_informada), size=quantidade).tolist()
+        
+        # Acrescentar os resultados da distribuição lognormal sem limpar a árvore
+        tree.insert('', 'end', values=("Números gerados (Lognormal)", str(numeros_lognormal)))
+        
+        media_log = tmean(numeros_lognormal)
+        variancia_log = tvar(numeros_lognormal)
+        desvio_log = tstd(numeros_lognormal)
+        skewness_log = calcular_skew(numeros_lognormal, media_log, desvio_log)
+        kurt_log = calcular_kurtosis(numeros_lognormal, media_log, desvio_log)
+        
+        tree.insert('', 'end', values=('Média (Lognormal)', f"{media_log:.4f}"))
+        tree.insert('', 'end', values=('Variância (Lognormal)', f"{variancia_log:.4f}"))
+        tree.insert('', 'end', values=('Desvio Padrão (Lognormal)', f"{desvio_log:.4f}"))
+        tree.insert('', 'end', values=('Coeficiente de Skewness (Lognormal)', f"{skewness_log:.4f}"))
+        tree.insert('', 'end', values=('Coeficiente de Kurtosis (Lognormal)', f"{kurt_log:.4f}"))
+        
+        # Exibe o gráfico baseado na amostra normal (a opção de plot é controlada pelos botões de opção)
+        last_numbers = numeros_normal
+        plot_histograma_replot()
         
     except ValueError:
         for item in tree.get_children():
             tree.delete(item)
         tree.insert('', 'end', values=('Erro', 'Insira números válidos.'))
-        for widget in tab_hist.winfo_children():
+        for widget in frame_plot_hist.winfo_children():
             widget.destroy()
 
-def plot_histograma_replot():
-    global last_numbers
+def gerar_amostra_normal():
     try:
-        children = frame_plot_hist.winfo_children()
-    except tk.TclError:
-        return
-    for widget in children:
-        widget.destroy()
-    
-    if last_numbers is None:
-        lbl = ttk.Label(frame_plot_hist, text="Nenhum conjunto de dados disponível.", foreground="red")
-        lbl.pack()
-        return
-    
-    try:
-        bins = int(entry_bins_hist.get())
+        quantidade = int(entry_quantidade.get())
+        media_informada = float(entry_media.get()) if entry_media.get() else 0  
+        desvio_informado = float(entry_desvio.get()) if entry_desvio.get() else 1
+        
+        numeros_normal = norm.rvs(loc=media_informada, scale=desvio_informado, size=quantidade).tolist()
+        process_numeros(numeros_normal, "Números gerados (Normal)")
     except ValueError:
-        bins = get_histogram_bins()
-    
-    counts, bins_array = np.histogram(last_numbers, bins=bins)
-    bin_widths = np.diff(bins_array)
-    rel_freq = counts / counts.sum()
-    density = rel_freq / bin_widths
+        for item in tree.get_children():
+            tree.delete(item)
+        tree.insert('', 'end', values=('Erro', 'Insira números válidos.'))
+        for widget in frame_plot_hist.winfo_children():
+            widget.destroy()
 
-    fig, ax = plt.subplots(figsize=(8, 6))
-    ax.bar(bins_array[:-1], density, width=bin_widths, align='edge', edgecolor='black')
-    ax.set_title("Histograma de Densidade de Probabilidade")
-    ax.set_xlabel("Valor")
-    ax.set_ylabel("Densidade")
-    ax.set_xlim(bins_array[0], bins_array[-1])
-    plt.tight_layout()
-    
-    canvas = FigureCanvasTkAgg(fig, master=frame_plot_hist)
-    canvas.draw()
-    canvas.get_tk_widget().pack(fill="both", expand=True)
+def gerar_amostra_lognormal():
+    try:
+        quantidade = int(entry_quantidade.get())
+        media_informada = float(entry_media.get()) if entry_media.get() else 0  
+        desvio_informado = float(entry_desvio.get()) if entry_desvio.get() else 1
+        
+        numeros_lognormal = lognorm.rvs(s=desvio_informado, scale=np.exp(media_informada), size=quantidade).tolist()
+        process_numeros(numeros_lognormal, "Números gerados (Lognormal)")
+    except ValueError:
+        for item in tree.get_children():
+            tree.delete(item)
+        tree.insert('', 'end', values=('Erro', 'Insira números válidos.'))
+        for widget in frame_plot_hist.winfo_children():
+            widget.destroy()
+
+def gerar_amostra_selecionada():
+    if dist_type.get() == "normal":
+        gerar_amostra_normal()
+    else:
+        gerar_amostra_lognormal()
+
+def plot_current():
+    # Atualiza o gráfico conforme a opção selecionada
+    if last_numbers is not None:
+        plot_histograma_replot()
 
 root = tk.Tk()
 root.title("JOAB MANOEL")
@@ -255,51 +320,120 @@ tab_parametros = ttk.Frame(notebook_principal)
 notebook_principal.add(tab_parametros, text="Parâmetros da Amostra")
 
 tab_hist = ttk.Frame(notebook_principal)
-notebook_principal.add(tab_hist, text="Histograma x PDF")
+notebook_principal.add(tab_hist, text="Histograma")
 
 # -- Aba de Parâmetros --
 frame_controles = ttk.Frame(tab_parametros, padding="20", style="Card.TFrame")
 frame_controles.pack(side="left", fill="y", padx=10, pady=10)
 
+dist_type = tk.StringVar(value="normal")
+lbl_dist = ttk.Label(frame_controles, text="Selecione a Distribuição:", style="TLabel")
+lbl_dist.grid(row=0, column=0, sticky="w", pady=(30, 5))
+lbl_dist.grid_remove()
+
+radio_normal = ttk.Radiobutton(
+    frame_controles,
+    text="Normal",
+    value="normal",
+    variable=dist_type,
+    style="TRadiobutton"
+)
+radio_normal.grid(row=1, column=0, sticky="w", pady=(0, 5))
+radio_normal.grid_remove()
+
+radio_lognormal = ttk.Radiobutton(
+    frame_controles,
+    text="Lognormal",
+    value="lognormal",
+    variable=dist_type,
+    style="TRadiobutton"
+)
+radio_lognormal.grid(row=2, column=0, sticky="w", pady=(0, 15))
+radio_lognormal.grid_remove()
+
 var_parametros = tk.BooleanVar(value=False)
 def toggle_quantidade():
     if var_parametros.get():
-        frame_quantidade.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 15))
+        frame_quantidade.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 15))
+        lbl_dist.grid()
+        radio_normal.grid()
+        radio_lognormal.grid()
     else:
         frame_quantidade.grid_forget()
+        lbl_dist.grid_remove()
+        radio_normal.grid_remove()
+        radio_lognormal.grid_remove()
 
 check_parametros = ttk.Checkbutton(
     frame_controles,
-    text="Gerar amostra com valores aleatórios (NORMAL)",
+    text="Gerar amostra com valores aleatórios",
     variable=var_parametros,
     command=toggle_quantidade,
     style="Toggle.TCheckbutton"
 )
-check_parametros.grid(row=0, column=0, sticky="w", pady=(30, 15))
+check_parametros.grid(row=0, column=1, sticky="w", padx=(10, 0), pady=(15, 5))
 
 frame_quantidade = ttk.Frame(frame_controles)
-label_quantidade = ttk.Label(frame_quantidade, text="Número de pontos amostral:", style="TLabel")
-label_quantidade.grid(row=0, column=0, sticky="w", pady=(0, 5))
-entry_quantidade = ttk.Entry(frame_quantidade, width=20, font=("Segoe UI", 11))
-entry_quantidade.grid(row=0, column=1, sticky="ew", padx=(10, 0), pady=(0, 15))
+label_quantidade = ttk.Label(frame_quantidade, text="Nº pontos:", style="TLabel")
+label_quantidade.grid(row=0, column=0, sticky="w", pady=(0, 3))
+entry_quantidade = ttk.Entry(frame_quantidade, width=10, font=("Segoe UI", 9))
+entry_quantidade.grid(row=0, column=1, sticky="ew", padx=(5, 0), pady=(0, 10))
 
 label_media = ttk.Label(frame_quantidade, text="Média:", style="TLabel")
-label_media.grid(row=1, column=0, sticky="w", pady=(0,5))
-entry_media = ttk.Entry(frame_quantidade, width=20, font=("Segoe UI", 11))
-entry_media.grid(row=1, column=1, sticky="ew", padx=(10, 0), pady=(0,15))
+label_media.grid(row=1, column=0, sticky="w", pady=(0, 3))
+entry_media = ttk.Entry(frame_quantidade, width=10, font=("Segoe UI", 9))
+entry_media.grid(row=1, column=1, sticky="ew", padx=(5, 0), pady=(0, 10))
 
 label_desvio = ttk.Label(frame_quantidade, text="Desvio Padrão:", style="TLabel")
-label_desvio.grid(row=2, column=0, sticky="w", pady=(0,5))
-entry_desvio = ttk.Entry(frame_quantidade, width=20, font=("Segoe UI", 11))
-entry_desvio.grid(row=2, column=1, sticky="ew", padx=(10, 0), pady=(0,15))
+label_desvio.grid(row=2, column=0, sticky="w", pady=(0, 3))
+entry_desvio = ttk.Entry(frame_quantidade, width=10, font=("Segoe UI", 9))
+entry_desvio.grid(row=2, column=1, sticky="ew", padx=(5, 0), pady=(0, 10))
+
+def gerar_amostra_normal():
+    try:
+        quantidade = int(entry_quantidade.get())
+        media_informada = float(entry_media.get()) if entry_media.get() else 0  
+        desvio_informado = float(entry_desvio.get()) if entry_desvio.get() else 1
+        
+        numeros_normal = norm.rvs(loc=media_informada, scale=desvio_informado, size=quantidade).tolist()
+        process_numeros(numeros_normal, "Números gerados (Normal)")
+    except ValueError:
+        for item in tree.get_children():
+            tree.delete(item)
+        tree.insert('', 'end', values=('Erro', 'Insira números válidos.'))
+        for widget in frame_plot_hist.winfo_children():
+            widget.destroy()
+
+def gerar_amostra_lognormal():
+    try:
+        quantidade = int(entry_quantidade.get())
+        media_informada = float(entry_media.get()) if entry_media.get() else 0  
+        desvio_informado = float(entry_desvio.get()) if entry_desvio.get() else 1
+        
+        numeros_lognormal = lognorm.rvs(s=desvio_informado, scale=np.exp(media_informada), size=quantidade).tolist()
+        process_numeros(numeros_lognormal, "Números gerados (Lognormal)")
+    except ValueError:
+        for item in tree.get_children():
+            tree.delete(item)
+        tree.insert('', 'end', values=('Erro', 'Insira números válidos.'))
+        for widget in frame_plot_hist.winfo_children():
+            widget.destroy()
+
+def gerar_amostra_selecionada():
+    if dist_type.get() == "normal":
+        gerar_amostra_normal()
+    else:
+        gerar_amostra_lognormal()
 
 button_calcular = ttk.Button(
     frame_controles,
     text="Calcular",
-    command=gerar_numeros_aleatorios,
+    command=gerar_amostra_selecionada,
     style="Accent.TButton"
 )
-button_calcular.grid(row=3, column=0, sticky="ew", pady=(5, 15))
+button_calcular.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(5, 15))
+
+frame_quantidade.grid_forget()
 
 file_type_var = tk.StringVar(value="txt")
 
@@ -349,14 +483,27 @@ entry_bins_hist.grid_remove()
 
 button_plot_hist = ttk.Button(
     frame_controls_hist,
-    text="Atualizar Histograma",
+    text="Atualizar Gráfico",
     command=plot_histograma_replot,
     style="Accent.TButton"
 )
 button_plot_hist.grid(row=2, column=0, sticky="w", pady=(5, 15))
 button_plot_hist.grid_remove()
 
+# Novos botões de opção para escolher entre PDF e CDF
+opcao_hist = tk.StringVar(value="PDF")
+lbl_plot_option = ttk.Label(frame_controls_hist, text="Visualização:")
+lbl_plot_option.grid(row=3, column=0, sticky="w", pady=(15, 5))
+
+radio_pdf = ttk.Radiobutton(frame_controls_hist, text="PDF", variable=opcao_hist, value="PDF", command=plot_current)
+radio_pdf.grid(row=4, column=0, sticky="w")
+
+radio_cdf = ttk.Radiobutton(frame_controls_hist, text="CDF", variable=opcao_hist, value="CDF", command=plot_current)
+radio_cdf.grid(row=5, column=0, sticky="w")
+
 frame_plot_hist = ttk.Frame(tab_hist, padding="20", style="Modern.TFrame")
 frame_plot_hist.pack(side="right", fill="both", expand=True, padx=10, pady=10)
+
+last_numbers = None
 
 root.mainloop()
