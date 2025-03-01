@@ -7,6 +7,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from PIL import Image, ImageTk  
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+import tempfile
+import os
 
 def calcular_skew(numeros, media, desvio_padrao):
     quantidade = len(numeros)
@@ -24,7 +29,8 @@ def get_histogram_bins(numeros):
 def calcular_pdf_normal(numeros):
     media = tmean(numeros)
     std_dev = tstd(numeros)
-    x = np.linspace(min(numeros), max(numeros), 200)
+    # Expande o intervalo para cobrir aproximadamente 99.99% da distribuição
+    x = np.linspace(media - 4 * std_dev, media + 4 * std_dev, 200)
     pdf = norm.pdf(x, loc=media, scale=std_dev)
     return x, pdf
 
@@ -57,6 +63,20 @@ def calcular_cdf_lognormal(numeros):
     cdf = lognorm.cdf(x, s=desvio_log, scale=np.exp(media_log))
     return x, cdf
 
+def calcular_histograma_acumulativo(numeros, bins=None):
+  
+    if bins is None:
+        bins = get_histogram_bins(numeros)
+    
+    hist, bin_edges = np.histogram(numeros, bins=bins)
+    hist_rel = hist / len(numeros)
+    cumulative = np.cumsum(hist_rel)
+    # Preparando dados para o gráfico de degraus
+    x = bin_edges
+    y = np.hstack([0, cumulative])
+    return x, y
+
+
 def importar_txt():
     file_path = filedialog.askopenfilename(
         title="Importar arquivo TXT",
@@ -76,6 +96,7 @@ def importar_txt():
         tree.insert('', 'end', values=('Erro', str(e)))
         for widget in frame_plot_hist.winfo_children():
             widget.destroy()
+
 
 def importar_excel():
     file_path = filedialog.askopenfilename(
@@ -102,6 +123,116 @@ def importar_excel():
         tree.insert('', 'end', values=('Erro', str(e)))
         for widget in frame_plot_hist.winfo_children():
             widget.destroy()
+
+def salvar_funcao():
+    # Função auxiliar para realizar a quebra de linha com base na largura máxima permitida.
+    def wrap_text(text, canvas, font_name, font_size, max_width):
+        words = text.split()
+        lines = []
+        current_line = ""
+        for word in words:
+            test_line = f"{current_line} {word}".strip() if current_line else word
+            if canvas.stringWidth(test_line, font_name, font_size) <= max_width:
+                current_line = test_line
+            else:
+                if current_line:
+                    lines.append(current_line)
+                current_line = word
+        if current_line:
+            lines.append(current_line)
+        return lines
+
+    # Permite salvar os resultados e gráficos gerados em um arquivo PDF, incluindo
+    # os gráficos de PDF, CDF e histogramas da aba de Histograma.
+    folder = filedialog.askdirectory(title="Selecione a pasta para salvar os arquivos")
+    if not folder:
+        return
+
+    try:
+        pdf_file = os.path.join(folder, "resultados.pdf")
+        c = canvas.Canvas(pdf_file, pagesize=letter)
+        width, height = letter
+        y = height - 50
+
+        # Cabeçalho do PDF com os resultados da TreeView
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(50, y, "Parâmetros da Amostra")	
+        y -= 30
+        c.setFont("Helvetica", 12)
+        max_line_width = width - 100  # margem de 50pt em cada lado
+
+        for item in tree.get_children():
+            parametros, valor = tree.item(item, "values")
+            text = f"{parametros}: {valor}"
+            # Quebra o texto se exceder a largura máxima definida
+            linhas = wrap_text(text, c, "Helvetica", 12, max_line_width)
+            for linha in linhas:
+                c.drawString(50, y, linha)
+                y -= 20
+                # Verifica se precisa criar uma nova página
+                if y < 50:
+                    c.showPage()
+                    y = height - 50
+                    c.setFont("Helvetica", 12)
+
+        c.showPage()  # Inicia nova página para os gráficos
+
+        # Se houver amostras, gera os gráficos PDF e CDF com os histogramas
+        if last_numbers is not None:
+            gráficos = []
+
+            # Gráfico PDF com histograma e função de densidade (PDF)
+            fig_pdf, ax_pdf = plt.subplots(figsize=(8, 6))
+            try:
+                bins = int(entry_bins_hist.get())
+            except ValueError:
+                bins = get_histogram_bins(last_numbers)
+            counts, bins_array = np.histogram(last_numbers, bins=bins)
+            bin_widths = np.diff(bins_array)
+            rel_freq = counts / counts.sum()
+            density = rel_freq / bin_widths
+            ax_pdf.bar(bins_array[:-1], density, width=bin_widths, align='edge', edgecolor='black')
+            x_pdf, pdf_values = calcular_pdf_normal(last_numbers)
+            ax_pdf.plot(x_pdf, pdf_values, color='red', linewidth=2, label='PDF')
+            ax_pdf.legend()
+            ax_pdf.set_title("Histograma de Densidade de Probabilidade (PDF)")
+            ax_pdf.set_xlabel(f"Valor\nCestas: {len(bins_array)-1}")
+            ax_pdf.set_ylabel("Densidade")
+            gráficos.append(fig_pdf)
+
+            # Gráfico CDF com histograma acumulativo e função de distribuição (CDF)
+            fig_cdf, ax_cdf = plt.subplots(figsize=(8, 6))
+            try:
+                bins = int(entry_bins_hist.get())
+            except ValueError:
+                bins = get_histogram_bins(last_numbers)
+            x_cdf, cdf_values = calcular_cdf_normal(last_numbers)
+            ax_cdf.plot(x_cdf, cdf_values, color='red', linewidth=2, label='CDF')
+            x_hist, y_hist = calcular_histograma_acumulativo(last_numbers, bins)
+            ax_cdf.step(x_hist, y_hist, where='post', color='blue', linewidth=2, label='Histograma Acumulativo')
+            ax_cdf.legend()
+            ax_cdf.set_title("Curva de Distribuição Acumulada (CDF) e Histograma Acumulativo")
+            ax_cdf.set_xlabel("Valor")
+            ax_cdf.set_ylabel("Probabilidade Acumulada")
+            ax_cdf.grid(True, linestyle='--', alpha=0.6)
+            gráficos.append(fig_cdf)
+
+            # Para cada gráfico gerado, insere uma nova página no PDF
+            for index, fig in enumerate(gráficos):
+                temp_file = os.path.join(tempfile.gettempdir(), f"grafico_extra_{index}.png")
+                fig.savefig(temp_file)
+                img = ImageReader(temp_file)
+                img_width = width - 100
+                img_height = height - 200
+                c.drawImage(img, 50, 100, width=img_width, height=img_height, preserveAspectRatio=True)
+                c.showPage()
+                os.remove(temp_file)
+                plt.close(fig)
+
+        c.save()
+        print("Arquivo PDF salvo com sucesso!")
+    except Exception as e:
+        print("Erro ao salvar arquivo PDF:", e)
 
 # A nova função unificada que plota PDF ou CDF na aba Histograma
 def plot_histograma_replot():
@@ -131,7 +262,6 @@ def plot_histograma_replot():
         density = rel_freq / bin_widths
 
         ax.bar(bins_array[:-1], density, width=bin_widths, align='edge', edgecolor='black')
-        # Plot da PDF normal sobre o histograma
         x, pdf = calcular_pdf_normal(last_numbers)
         ax.plot(x, pdf, color='red', linewidth=2, label='PDF')
         ax.legend()
@@ -140,10 +270,21 @@ def plot_histograma_replot():
         ax.set_ylabel("Densidade")
   
     else:  # opcao == "CDF"
+        try:
+            bins = int(entry_bins_hist.get())
+        except ValueError:
+            bins = get_histogram_bins(last_numbers)
+
+        # Plot da CDF normal
         x, cdf_values = calcular_cdf_normal(last_numbers)
-        ax.plot(x, cdf_values, color='purple', linewidth=2, label='CDF')
+        ax.plot(x, cdf_values, color='red', linewidth=2, label='CDF')
+        
+        # Plot do histograma acumulativo
+        x_hist, y_hist = calcular_histograma_acumulativo(last_numbers, bins)
+        ax.step(x_hist, y_hist, where='post', color='blue', linewidth=2, label='Histograma Acumulativo')
+        
         ax.legend()
-        ax.set_title("Curva de Distribuição Acumulada (CDF)")
+        ax.set_title("Curva de Distribuição Acumulada (CDF) e Histograma Acumulativo")
         ax.set_xlabel("Valor")
         ax.set_ylabel("Probabilidade Acumulada")
         ax.grid(True, linestyle='--', alpha=0.6)
@@ -152,6 +293,7 @@ def plot_histograma_replot():
     canvas = FigureCanvasTkAgg(fig, master=frame_plot_hist)
     canvas.draw()
     canvas.get_tk_widget().pack(fill="both", expand=True)
+
 
 def process_numeros(numeros, descricao):
     global last_numbers
@@ -261,10 +403,15 @@ root.geometry("1500x700")
 frame_import = ttk.Frame(root, padding="10")
 frame_import.pack(side="top", fill="x")
 
+# Create a left frame that holds the "Abrir", import options and "Salvar" buttons
+frame_open_side = ttk.Frame(frame_import)
+frame_open_side.pack(side="left", padx=1)
+
 image_path = os.path.join(os.getcwd(), "Imagens")
 abrir_image_path = os.path.join(image_path, "Abrir.jpg")
 txt_image_path = os.path.join(image_path, "txt.jpg")
 excel_image_path = os.path.join(image_path, "excel.jpg")
+salvar_image_path = os.path.join(image_path, "salvar.jpg")
 
 img_abrir = Image.open(abrir_image_path)
 img_abrir = img_abrir.resize((40, 40), Image.Resampling.LANCZOS)
@@ -278,13 +425,25 @@ img_excel = Image.open(excel_image_path)
 img_excel = img_excel.resize((40, 40), Image.Resampling.LANCZOS)
 photo_excel = ImageTk.PhotoImage(img_excel)
 
+img_salvar = Image.open(salvar_image_path)
+img_salvar = img_salvar.resize((40, 40), Image.Resampling.LANCZOS)
+photo_salvar = ImageTk.PhotoImage(img_salvar)
+
 def show_import_options():
+    # Toggle the visibility of the import options. In addition, reposition the "Salvar" button:
+    # Before clicking "Abrir", "Salvar" is packed on the right.
+    # When clicking "Abrir", it is repacked to the left, next to the Excel button.
     if frame_import_options.winfo_ismapped():
         frame_import_options.pack_forget()
+        frame_salvar.pack_forget()
+        frame_salvar.pack(side="right", padx=10)
     else:
         frame_import_options.pack(side="left", padx=10)
+        frame_salvar.pack_forget()
+        frame_salvar.pack(side="left", padx=10)
 
-frame_abrir = ttk.Frame(frame_import)
+# Frame for the "Abrir" button
+frame_abrir = ttk.Frame(frame_open_side)
 frame_abrir.pack(side="left", padx=10)
 
 btn_abrir = ttk.Button(frame_abrir, image=photo_abrir, command=show_import_options)
@@ -294,7 +453,8 @@ btn_abrir.pack()
 lbl_abrir = ttk.Label(frame_abrir, text="Abrir", font=("Segoe UI", 11))
 lbl_abrir.pack()
 
-frame_import_options = ttk.Frame(frame_import, padding="10")
+# Frame for import options (TXT and Excel), initially not packed
+frame_import_options = ttk.Frame(frame_open_side, padding="10")
 
 btn_txt = ttk.Button(frame_import_options, image=photo_txt, command=importar_txt)
 btn_txt.image = photo_txt
@@ -303,6 +463,19 @@ btn_txt.pack(side="left", padx=10)
 btn_excel = ttk.Button(frame_import_options, image=photo_excel, command=importar_excel)
 btn_excel.image = photo_excel
 btn_excel.pack(side="left", padx=10)
+
+# Frame for the "Salvar" button.
+frame_salvar = ttk.Frame(frame_open_side)
+
+btn_salvar = ttk.Button(frame_salvar, image=photo_salvar, command=salvar_funcao)
+btn_salvar.image = photo_salvar
+btn_salvar.pack()
+
+lbl_salvar = ttk.Label(frame_salvar, text="Salvar", font=("Segoe UI", 11))
+lbl_salvar.pack()
+
+# Initially, the "Salvar" option appears before clicking "Abrir" by being packed on the right.
+frame_salvar.pack(side="right", padx=10)
 
 style = ttk.Style(root)
 style.theme_use("clam")
