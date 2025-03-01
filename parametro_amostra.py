@@ -138,7 +138,7 @@ def plot_histograma_replot():
         ax.set_title("Histograma de Densidade de Probabilidade (PDF)")
         ax.set_xlabel(f"Valor\nCestas: {len(bins_array)-1}")
         ax.set_ylabel("Densidade")
-        ax.set_xlim(bins_array[0], bins_array[-1])
+  
     else:  # opcao == "CDF"
         x, cdf_values = calcular_cdf_normal(last_numbers)
         ax.plot(x, cdf_values, color='purple', linewidth=2, label='CDF')
@@ -327,9 +327,6 @@ frame_controles = ttk.Frame(tab_parametros, padding="20", style="Card.TFrame")
 frame_controles.pack(side="left", fill="y", padx=10, pady=10)
 
 dist_type = tk.StringVar(value="normal")
-lbl_dist = ttk.Label(frame_controles, text="Selecione a Distribuição:", style="TLabel")
-lbl_dist.grid(row=0, column=0, sticky="w", pady=(30, 5))
-lbl_dist.grid_remove()
 
 radio_normal = ttk.Radiobutton(
     frame_controles,
@@ -355,12 +352,10 @@ var_parametros = tk.BooleanVar(value=False)
 def toggle_quantidade():
     if var_parametros.get():
         frame_quantidade.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 15))
-        lbl_dist.grid()
         radio_normal.grid()
         radio_lognormal.grid()
     else:
         frame_quantidade.grid_forget()
-        lbl_dist.grid_remove()
         radio_normal.grid_remove()
         radio_lognormal.grid_remove()
 
