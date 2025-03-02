@@ -84,6 +84,38 @@ def calcular_histograma_acumulativo(numeros, bins=None):
     y = np.hstack([0, cumulative])
     return x, y
 
+def teste_kolmogorov_smirnov(numeros, modelo='normal'):
+    if not numeros:
+        return None
+
+    data = np.array(numeros)
+    if modelo == 'lognormal':
+        data = data[data > 0]
+        if len(data) == 0:
+            return None
+
+    sorted_data = np.sort(data)
+    n = len(sorted_data)
+    # Empirical CDF: para cada observação ordenada, Fi = i/n
+    empirical_cdf = np.arange(1, n + 1) / n
+
+    if modelo == 'normal':
+        media = tmean(data)
+        std_dev = tstd(data)
+        theoretical_cdf = norm.cdf(sorted_data, loc=media, scale=std_dev)
+    else:
+                # Parâmetros para a distribuição lognormal, semelhante à função calcular_cdf_lognormal
+        logs = np.log(sorted_data)
+        media_log = tmean(logs)
+        media_original = tmean(data)
+        std_original = tstd(data)
+        s = np.sqrt(np.log(1 + (std_original / media_original) ** 2))
+        theoretical_cdf = lognorm.cdf(sorted_data, s=s, scale=np.exp(media_log))
+
+    differences = np.abs(empirical_cdf - theoretical_cdf)
+    ks = np.max(differences)
+    return ks        
+
 def importar_txt():
     file_path = filedialog.askopenfilename(
         title="Importar arquivo TXT",
@@ -515,7 +547,6 @@ radio_normal = ttk.Radiobutton(
     style="TRadiobutton"
 )
 radio_normal.grid(row=1, column=0, sticky="w", pady=(0, 5))
-radio_normal.grid_remove()
 
 radio_lognormal = ttk.Radiobutton(
     frame_controles,
@@ -525,18 +556,13 @@ radio_lognormal = ttk.Radiobutton(
     style="TRadiobutton"
 )
 radio_lognormal.grid(row=2, column=0, sticky="w", pady=(0, 15))
-radio_lognormal.grid_remove()
 
 var_parametros = tk.BooleanVar(value=False)
 def toggle_quantidade():
     if var_parametros.get():
         frame_quantidade.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 15))
-        radio_normal.grid()
-        radio_lognormal.grid()
     else:
         frame_quantidade.grid_forget()
-        radio_normal.grid_remove()
-        radio_lognormal.grid_remove()
 
 check_parametros = ttk.Checkbutton(
     frame_controles,
@@ -637,10 +663,8 @@ var_bins_hist = tk.BooleanVar()
 def toggle_bins_hist():
     if var_bins_hist.get():
         entry_bins_hist.grid(row=1, column=0, sticky="w", pady=(0, 15))
-        button_plot_hist.grid(row=2, column=0, sticky="w", pady=(5, 15))
     else:
         entry_bins_hist.grid_remove()
-        button_plot_hist.grid_remove()
 
 check_bins_hist = ttk.Checkbutton(
     frame_controls_hist,
@@ -662,7 +686,7 @@ button_plot_hist = ttk.Button(
     style="Accent.TButton"
 )
 button_plot_hist.grid(row=2, column=0, sticky="w", pady=(5, 15))
-button_plot_hist.grid_remove()
+# O botão "Atualizar Gráfico" agora permanece sempre visível.
 
 # Novos botões de opção para escolher entre PDF e CDF
 opcao_hist = tk.StringVar(value="PDF")
