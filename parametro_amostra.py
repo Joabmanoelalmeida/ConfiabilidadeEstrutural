@@ -13,6 +13,8 @@ from reportlab.lib.utils import ImageReader
 import tempfile
 import os
 
+last_numbers = None
+
 def calcular_skew(numeros, media, desvio_padrao):
     quantidade = len(numeros)
     skew = (1 / (quantidade * desvio_padrao**3)) * sum((x - media)**3 for x in numeros)
@@ -353,6 +355,7 @@ def process_numeros(numeros, descricao):
     
     last_numbers = numeros
     plot_histograma_replot()
+    update_ks_test()
 
 def gerar_numeros_aleatorios():
     try:
@@ -702,6 +705,23 @@ radio_cdf.grid(row=5, column=0, sticky="w")
 frame_plot_hist = ttk.Frame(tab_hist, padding="20", style="Modern.TFrame")
 frame_plot_hist.pack(side="right", fill="both", expand=True, padx=10, pady=10)
 
-last_numbers = None
+style = ttk.Style()
+style.configure("Centered.TLabelframe.Label", anchor="center")
+frame_teste = ttk.LabelFrame(frame_controls_hist, text="Resultado\nTeste de aderência:", style="Centered.TLabelframe")
+frame_teste.grid(row=6, column=0, pady=(15, 5), sticky="ew")
+
+tree_teste = ttk.Treeview(frame_teste, columns=("KS", "Limite"), show="headings", height=2)
+tree_teste.heading("KS", text="KS")
+tree_teste.column("KS", anchor="center", width=150)
+tree_teste.heading("Limite", text="Limite")
+tree_teste.column("Limite", anchor="center", width=150)
+tree_teste.grid(row=0, column=0, padx=5, pady=5)
+
+def update_ks_test():
+    ks = teste_kolmogorov_smirnov(last_numbers, modelo=dist_type.get()) if last_numbers else None
+    ks_display = f"{ks:.4f}" if ks is not None else "N/A"
+    for item in tree_teste.get_children():
+        tree_teste.delete(item)
+    tree_teste.insert('', 'end', values=(ks_display, '0.136'))
 
 root.mainloop()
