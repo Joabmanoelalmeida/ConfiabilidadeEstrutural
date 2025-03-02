@@ -36,7 +36,6 @@ def get_histogram_bins(numeros):
 def calcular_pdf_normal(numeros):
     media = tmean(numeros)
     std_dev = tstd(numeros)
-    # Expande o intervalo para cobrir aproximadamente 99.99% da distribuição
     x = np.linspace(media - 4 * std_dev, media + 4 * std_dev, 200)
     pdf = norm.pdf(x, loc=media, scale=std_dev)
     return x, pdf
@@ -46,10 +45,12 @@ def calcular_pdf_lognormal(numeros):
     if not numeros_pos:
         return None, None
     logs = np.log(numeros_pos)
+    media = tmean(numeros_pos)
+    desv = tstd(numeros_pos)
+    s = np.sqrt(np.log(1 + (desv / media)**2))
     media_log = tmean(logs)
-    desvio_log = tstd(logs)
     x = np.linspace(min(numeros_pos), max(numeros_pos), 200)
-    pdf = lognorm.pdf(x, s=desvio_log, scale=np.exp(media_log))
+    pdf = lognorm.pdf(x, s=s, scale=np.exp(media_log)) 
     return x, pdf
 
 def calcular_cdf_normal(numeros):
@@ -64,25 +65,24 @@ def calcular_cdf_lognormal(numeros):
     if not numeros_pos:
         return None, None
     logs = np.log(numeros_pos)
+    media = tmean(numeros_pos)
+    desv = tstd(numeros_pos)
+    s = np.sqrt(np.log(1 + (desv / media)**2))
     media_log = tmean(logs)
-    desvio_log = tstd(logs)
     x = np.linspace(min(numeros_pos), max(numeros_pos), 200)
-    cdf = lognorm.cdf(x, s=desvio_log, scale=np.exp(media_log))
+    cdf = lognorm.cdf(x, s=s, scale=np.exp(media_log))
     return x, cdf
 
 def calcular_histograma_acumulativo(numeros, bins=None):
-  
     if bins is None:
         bins = get_histogram_bins(numeros)
     
     hist, bin_edges = np.histogram(numeros, bins=bins)
     hist_rel = hist / len(numeros)
     cumulative = np.cumsum(hist_rel)
-    # Preparando dados para o gráfico de degraus
     x = bin_edges
     y = np.hstack([0, cumulative])
     return x, y
-
 
 def importar_txt():
     file_path = filedialog.askopenfilename(
@@ -104,7 +104,6 @@ def importar_txt():
         for widget in frame_plot_hist.winfo_children():
             widget.destroy()
 
-
 def importar_excel():
     file_path = filedialog.askopenfilename(
         title="Importar arquivo Excel",
@@ -114,7 +113,6 @@ def importar_excel():
         return
     try:
         df = pd.read_excel(file_path)
-        # Procura a primeira coluna com dados numéricos
         numeros = None
         for col in df.columns:
             temp = pd.to_numeric(df[col], errors='coerce').dropna().tolist()
@@ -132,7 +130,6 @@ def importar_excel():
             widget.destroy()
 
 def salvar_funcao():
-    # Função auxiliar para realizar a quebra de linha com base na largura máxima permitida.
     def wrap_text(text, canvas, font_name, font_size, max_width):
         words = text.split()
         lines = []
@@ -149,9 +146,6 @@ def salvar_funcao():
             lines.append(current_line)
         return lines
 
-    # Permite salvar os resultados e gráficos gerados em um arquivo PDF, incluindo
-    # os gráficos de PDF, CDF e histogramas da aba de Histograma.
-    # Solicita que o usuário forneça o nome do arquivo PDF
     pdf_file = filedialog.asksaveasfilename(
         defaultextension=".pdf",
         filetypes=[("PDF files", "*.pdf")],
@@ -166,30 +160,26 @@ def salvar_funcao():
         width, height = letter
         y = height - 50
 
-        # Cabeçalho do PDF com os resultados da TreeView
         c.setFont("Helvetica-Bold", 14)
         c.drawString(50, y, "Parâmetros da Amostra")
         y -= 30
         c.setFont("Helvetica", 12)
-        max_line_width = width - 100  # margem de 50pt em cada lado
+        max_line_width = width - 100
 
         for item in tree.get_children():
             parametros, valor = tree.item(item, "values")
             text = f"{parametros}: {valor}"
-            # Quebra o texto se exceder a largura máxima definida
             linhas = wrap_text(text, c, "Helvetica", 12, max_line_width)
             for linha in linhas:
                 c.drawString(50, y, linha)
                 y -= 20
-                # Verifica se precisa criar uma nova página
                 if y < 50:
                     c.showPage()
                     y = height - 50
                     c.setFont("Helvetica", 12)
 
-        c.showPage()  # Inicia nova página para os gráficos
+        c.showPage()
 
-        # Se houver amostras, gera os gráficos PDF e CDF com os histogramas
         if last_numbers is not None:
             gráficos = []
 
@@ -204,7 +194,11 @@ def salvar_funcao():
             rel_freq = counts / counts.sum()
             density = rel_freq / bin_widths
             ax_pdf.bar(bins_array[:-1], density, width=bin_widths, align='edge', edgecolor='black')
-            x_pdf, pdf_values = calcular_pdf_normal(last_numbers)
+            
+            if dist_type.get() == "normal":
+                x_pdf, pdf_values = calcular_pdf_normal(last_numbers)
+            else:
+                x_pdf, pdf_values = calcular_pdf_lognormal(last_numbers)
             ax_pdf.plot(x_pdf, pdf_values, color='red', linewidth=2, label='PDF')
             ax_pdf.legend()
             ax_pdf.set_title("Histograma de Densidade de Probabilidade (PDF)")
@@ -218,7 +212,10 @@ def salvar_funcao():
                 bins = int(entry_bins_hist.get())
             except ValueError:
                 bins = get_histogram_bins(last_numbers)
-            x_cdf, cdf_values = calcular_cdf_normal(last_numbers)
+            if dist_type.get() == "normal":
+                x_cdf, cdf_values = calcular_cdf_normal(last_numbers)
+            else:
+                x_cdf, cdf_values = calcular_cdf_lognormal(last_numbers)
             ax_cdf.plot(x_cdf, cdf_values, color='red', linewidth=2, label='CDF')
             x_hist, y_hist = calcular_histograma_acumulativo(last_numbers, bins)
             ax_cdf.step(x_hist, y_hist, where='post', color='blue', linewidth=2, label='Histograma Acumulativo')
@@ -229,7 +226,6 @@ def salvar_funcao():
             ax_cdf.grid(True, linestyle='--', alpha=0.6)
             gráficos.append(fig_cdf)
 
-            # Para cada gráfico gerado, insere uma nova página no PDF
             for index, fig in enumerate(gráficos):
                 temp_file = os.path.join(tempfile.gettempdir(), f"grafico_extra_{index}.png")
                 fig.savefig(temp_file)
@@ -246,7 +242,6 @@ def salvar_funcao():
     except Exception as e:
         print("Erro ao salvar arquivo PDF:", e)
 
-# A nova função unificada que plota PDF ou CDF na aba Histograma
 def plot_histograma_replot():
     global last_numbers
     try:
@@ -274,7 +269,11 @@ def plot_histograma_replot():
         density = rel_freq / bin_widths
 
         ax.bar(bins_array[:-1], density, width=bin_widths, align='edge', edgecolor='black')
-        x, pdf = calcular_pdf_normal(last_numbers)
+        # Usa a função de PDF de acordo com a opção selecionada
+        if dist_type.get() == "normal":
+            x, pdf = calcular_pdf_normal(last_numbers)
+        else:
+            x, pdf = calcular_pdf_lognormal(last_numbers)
         ax.plot(x, pdf, color='red', linewidth=2, label='PDF')
         ax.legend()
         ax.set_title("Histograma de Densidade de Probabilidade (PDF)")
@@ -286,15 +285,10 @@ def plot_histograma_replot():
             bins = int(entry_bins_hist.get())
         except ValueError:
             bins = get_histogram_bins(last_numbers)
-
-        # Plot da CDF normal
         x, cdf_values = calcular_cdf_normal(last_numbers)
         ax.plot(x, cdf_values, color='red', linewidth=2, label='CDF')
-        
-        # Plot do histograma acumulativo
         x_hist, y_hist = calcular_histograma_acumulativo(last_numbers, bins)
         ax.step(x_hist, y_hist, where='post', color='blue', linewidth=2, label='Histograma Acumulativo')
-        
         ax.legend()
         ax.set_title("Curva de Distribuição Acumulada (CDF) e Histograma Acumulativo")
         ax.set_xlabel("Valor")
