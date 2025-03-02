@@ -24,7 +24,14 @@ def calcular_kurtosis(numeros, media, desvio_padrao):
     return kurt
 
 def get_histogram_bins(numeros):
-    return int(np.sqrt(len(numeros))) 
+    n = len(numeros)
+    if n == 0:
+        return 1
+    sigma = tstd(numeros)
+    h = 3.5 * sigma / (n ** (1/3))
+    data_range = max(numeros) - min(numeros)
+    bins = int(np.ceil(data_range / h))
+    return bins if bins > 0 else 1
 
 def calcular_pdf_normal(numeros):
     media = tmean(numeros)
@@ -144,19 +151,24 @@ def salvar_funcao():
 
     # Permite salvar os resultados e gráficos gerados em um arquivo PDF, incluindo
     # os gráficos de PDF, CDF e histogramas da aba de Histograma.
-    folder = filedialog.askdirectory(title="Selecione a pasta para salvar os arquivos")
-    if not folder:
+    # Solicita que o usuário forneça o nome do arquivo PDF
+    pdf_file = filedialog.asksaveasfilename(
+        defaultextension=".pdf",
+        filetypes=[("PDF files", "*.pdf")],
+        title="Salvar arquivo PDF",
+        initialfile="resultados.pdf"
+    )
+    if not pdf_file:
         return
 
     try:
-        pdf_file = os.path.join(folder, "resultados.pdf")
         c = canvas.Canvas(pdf_file, pagesize=letter)
         width, height = letter
         y = height - 50
 
         # Cabeçalho do PDF com os resultados da TreeView
         c.setFont("Helvetica-Bold", 14)
-        c.drawString(50, y, "Parâmetros da Amostra")	
+        c.drawString(50, y, "Parâmetros da Amostra")
         y -= 30
         c.setFont("Helvetica", 12)
         max_line_width = width - 100  # margem de 50pt em cada lado
