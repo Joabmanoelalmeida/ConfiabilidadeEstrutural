@@ -212,6 +212,24 @@ def salvar_funcao():
                     y = height - 50
                     c.setFont("Helvetica", 12)
 
+        # Adicionar o resultado do teste de aderência
+        y -= 30
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(50, y, "Resultado Teste de Aderência:")
+        y -= 30
+        c.setFont("Helvetica", 12)
+        for item in tree_teste.get_children():
+            ks, limite = tree_teste.item(item, "values")
+            text = f"KS: {ks}, Limite: {limite}"
+            linhas = wrap_text(text, c, "Helvetica", 12, max_line_width)
+            for linha in linhas:
+                c.drawString(50, y, linha)
+                y -= 20
+                if y < 50:
+                    c.showPage()
+                    y = height - 50
+                    c.setFont("Helvetica", 12)
+
         c.showPage()
 
         if last_numbers is not None:
@@ -313,6 +331,8 @@ def plot_histograma_replot():
         ax.set_title("Histograma de Densidade de Probabilidade (PDF)")
         ax.set_xlabel(f"Valor\nCestas: {len(bins_array)-1}")
         ax.set_ylabel("Densidade")
+        
+        update_ks_test()
   
     else:  # opcao == "CDF"
         try:
@@ -355,7 +375,6 @@ def process_numeros(numeros, descricao):
     
     last_numbers = numeros
     plot_histograma_replot()
-    update_ks_test()
 
 def gerar_numeros_aleatorios():
     try:
