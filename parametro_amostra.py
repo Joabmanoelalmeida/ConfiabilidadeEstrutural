@@ -1,4 +1,6 @@
-from scipy.stats import tmean, tvar, tstd, norm, lognorm
+from scipy.stats import norm, lognorm
+import numpy as np
+from numpy import mean, var, std
 import tkinter as tk
 from tkinter import ttk, filedialog
 import os
@@ -29,35 +31,36 @@ def get_histogram_bins(numeros):
     n = len(numeros)
     if n == 0:
         return 1
-    sigma = tstd(numeros)
+    sigma = std(numeros)
     h = 3.5 * sigma / (n ** (1/3))
     data_range = max(numeros) - min(numeros)
     bins = int(np.ceil(data_range / h))
     return bins if bins > 0 else 1
 
 def calcular_pdf_normal(numeros):
-    media = tmean(numeros)
-    std_dev = tstd(numeros)
+    media = mean(numeros)
+    std_dev = std(numeros)
     x = np.linspace(media - 4 * std_dev, media + 4 * std_dev, 200)
     pdf = norm.pdf(x, loc=media, scale=std_dev)
     return x, pdf
 
 def calcular_pdf_lognormal(numeros):
+    # Seleciona apenas os valores positivos (a distribuição lognormal é definida para x > 0)
     numeros_pos = [x for x in numeros if x > 0]
     if not numeros_pos:
         return None, None
+    
     logs = np.log(numeros_pos)
-    media = tmean(numeros_pos)
-    desv = tstd(numeros_pos)
-    s = np.sqrt(np.log(1 + (desv / media)**2))
-    media_log = tmean(logs)
+    mu = np.mean(logs)
+    sigma = np.std(logs, ddof=0)
+    
     x = np.linspace(min(numeros_pos), max(numeros_pos), 200)
-    pdf = lognorm.pdf(x, s=s, scale=np.exp(media_log)) 
+    pdf = lognorm.pdf(x, s=sigma, loc=0, scale=np.exp(mu))
     return x, pdf
 
 def calcular_cdf_normal(numeros):
-    media = tmean(numeros)
-    std_dev = tstd(numeros)
+    media = mean(numeros)
+    std_dev = std(numeros)
     x = np.linspace(min(numeros), max(numeros), 200)
     cdf = norm.cdf(x, loc=media, scale=std_dev)
     return x, cdf
@@ -67,10 +70,10 @@ def calcular_cdf_lognormal(numeros):
     if not numeros_pos:
         return None, None
     logs = np.log(numeros_pos)
-    media = tmean(numeros_pos)
-    desv = tstd(numeros_pos)
+    media = mean(numeros_pos)
+    desv = std(numeros_pos)
     s = np.sqrt(np.log(1 + (desv / media)**2))
-    media_log = tmean(logs)
+    media_log = mean(logs)
     x = np.linspace(min(numeros_pos), max(numeros_pos), 200)
     cdf = lognorm.cdf(x, s=s, scale=np.exp(media_log))
     return x, cdf
@@ -101,25 +104,23 @@ def teste_kolmogorov_smirnov(numeros, modelo='normal'):
 
     sorted_data = np.sort(data)
     n = len(sorted_data)
-    # Empirical CDF: para cada observação ordenada, Fi = i/n
     empirical_cdf = np.arange(1, n + 1) / n
 
     if modelo == 'normal':
-        media = tmean(data)
-        std_dev = tstd(data)
+        media = mean(data)
+        std_dev = std(data)
         theoretical_cdf = norm.cdf(sorted_data, loc=media, scale=std_dev)
     else:
-                # Parâmetros para a distribuição lognormal, semelhante à função calcular_cdf_lognormal
         logs = np.log(sorted_data)
-        media_log = tmean(logs)
-        media_original = tmean(data)
-        std_original = tstd(data)
+        media_log = mean(logs)
+        media_original = mean(data)
+        std_original = std(data)
         s = np.sqrt(np.log(1 + (std_original / media_original) ** 2))
         theoretical_cdf = lognorm.cdf(sorted_data, s=s, scale=np.exp(media_log))
 
     differences = np.abs(empirical_cdf - theoretical_cdf)
     ks = np.max(differences)
-    return ks        
+    return ks
 
 def importar_txt():
     file_path = filedialog.askopenfilename(
@@ -258,7 +259,7 @@ def salvar_funcao():
             ax_pdf.legend()
             ax_pdf.set_title("Histograma de Densidade de Probabilidade (PDF)")
             ax_pdf.set_xlabel(f"Valor\nCestas: {len(bins_array)-1}")
-            ax_pdf.set_ylabel("Densidade")
+            ax_pdf.set_ylabel("Densidade de probabilidade")
             gráficos.append(fig_pdf)
 
             # Gráfico CDF com histograma acumulativo e função de distribuição (CDF)
@@ -274,6 +275,29 @@ def salvar_funcao():
             ax_cdf.plot(x_cdf, cdf_values, color='red', linewidth=2, label='CDF')
             x_hist, y_hist = calcular_histograma_acumulativo(last_numbers, bins)
             ax_cdf.step(x_hist, y_hist, where='post', color='blue', linewidth=2, label='Histograma Acumulativo')
+            
+            # Cálculo dos pontos de maior diferença (KS)
+            data = np.array(last_numbers)
+            sorted_data = np.sort(data)
+            n = len(sorted_data)
+            empirical_cdf = np.arange(1, n + 1) / n
+            if dist_type.get() == "normal":
+                theoretical_cdf = norm.cdf(sorted_data, loc=mean(data), scale=std(data))
+            else:
+                logs = np.log(sorted_data)
+                mu = np.mean(logs)
+                sigma = np.std(logs, ddof=0)
+                theoretical_cdf = lognorm.cdf(sorted_data, s=sigma, loc=0, scale=np.exp(mu))
+            differences = np.abs(empirical_cdf - theoretical_cdf)
+            idx_max = np.argmax(differences)
+            x_max = sorted_data[idx_max]
+            emp_val = empirical_cdf[idx_max]
+            theo_val = theoretical_cdf[idx_max]
+            # Plota os pontos e a linha conectando-os
+            ax_cdf.plot([x_max], [emp_val], marker='o', markersize=8, color='green', label='Empírica KS')
+            ax_cdf.plot([x_max], [theo_val], marker='o', markersize=8, color='purple', label='Teórica KS')
+            ax_cdf.plot([x_max, x_max], [emp_val, theo_val], color='black', linestyle='--', linewidth=2)
+
             ax_cdf.legend()
             ax_cdf.set_title("Curva de Distribuição Acumulada (CDF) e Histograma Acumulativo")
             ax_cdf.set_xlabel("Valor")
@@ -324,7 +348,6 @@ def plot_histograma_replot():
         density = rel_freq / bin_widths
 
         ax.bar(bins_array[:-1], density, width=bin_widths, align='edge', edgecolor='black')
-        # Usa a função de PDF de acordo com a opção selecionada
         if dist_type.get() == "normal":
             x, pdf = calcular_pdf_normal(last_numbers)
         else:
@@ -342,10 +365,35 @@ def plot_histograma_replot():
             bins = int(entry_bins_hist.get())
         except ValueError:
             bins = get_histogram_bins(last_numbers)
-        x, cdf_values = calcular_cdf_normal(last_numbers)
+        if dist_type.get() == "normal":
+            x, cdf_values = calcular_cdf_normal(last_numbers)
+        else:
+            x, cdf_values = calcular_cdf_lognormal(last_numbers)
         ax.plot(x, cdf_values, color='red', linewidth=2, label='CDF')
         x_hist, y_hist = calcular_histograma_acumulativo(last_numbers, bins)
         ax.step(x_hist, y_hist, where='post', color='blue', linewidth=2, label='Histograma Acumulativo')
+        
+        # Cálculo dos pontos com maior diferença KS
+        data = np.array(last_numbers)
+        sorted_data = np.sort(data)
+        n = len(sorted_data)
+        empirical_cdf = np.arange(1, n+1) / n
+        if dist_type.get() == "normal":
+            theoretical_cdf = norm.cdf(sorted_data, loc=mean(data), scale=std(data))
+        else:
+            logs = np.log(sorted_data)
+            mu = np.mean(logs)
+            sigma = np.std(logs, ddof=0)
+            theoretical_cdf = lognorm.cdf(sorted_data, s=sigma, loc=0, scale=np.exp(mu))
+        differences = np.abs(empirical_cdf - theoretical_cdf)
+        idx_max = np.argmax(differences)
+        x_max = sorted_data[idx_max]
+        emp_val = empirical_cdf[idx_max]
+        theo_val = theoretical_cdf[idx_max]
+        ax.plot([x_max], [emp_val], marker='o', markersize=8, color='green', label='Empírica KS')
+        ax.plot([x_max], [theo_val], marker='o', markersize=8, color='purple', label='Teórica KS')
+        ax.plot([x_max, x_max], [emp_val, theo_val], color='black', linestyle='--', linewidth=2)
+        
         ax.legend()
         ax.set_title("Curva de Distribuição Acumulada (CDF) e Histograma Acumulativo")
         ax.set_xlabel("Valor")
@@ -360,9 +408,9 @@ def plot_histograma_replot():
 
 def process_numeros(numeros, descricao):
     global last_numbers
-    media_calculada = tmean(numeros)
-    variancia = tvar(numeros)
-    desvio_padrao_calculado = tstd(numeros)
+    media_calculada = mean(numeros)
+    variancia = var(numeros)
+    desvio_padrao_calculado = std(numeros)
     skewness = calcular_skew(numeros, media_calculada, desvio_padrao_calculado)
     kurt = calcular_kurtosis(numeros, media_calculada, desvio_padrao_calculado)
     cov = covariancia(media_calculada, desvio_padrao_calculado)
@@ -397,9 +445,9 @@ def gerar_numeros_aleatorios():
         # Acrescentar os resultados da distribuição lognormal sem limpar a árvore
         tree.insert('', 'end', values=("Números gerados (Lognormal)", str(numeros_lognormal)))
         
-        media_log = tmean(numeros_lognormal)
-        variancia_log = tvar(numeros_lognormal)
-        desvio_log = tstd(numeros_lognormal)
+        media_log = mean(numeros_lognormal)
+        variancia_log = var(numeros_lognormal)
+        desvio_log = std(numeros_lognormal)
         skewness_log = calcular_skew(numeros_lognormal, media_log, desvio_log)
         kurt_log = calcular_kurtosis(numeros_lognormal, media_log, desvio_log)
         
