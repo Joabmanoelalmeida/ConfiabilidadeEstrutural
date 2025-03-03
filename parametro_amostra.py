@@ -86,6 +86,9 @@ def calcular_histograma_acumulativo(numeros, bins=None):
     y = np.hstack([0, cumulative])
     return x, y
 
+def covariancia(media, desvio_padrao):
+    return desvio_padrao / media
+
 def teste_kolmogorov_smirnov(numeros, modelo='normal'):
     if not numeros:
         return None
@@ -362,6 +365,7 @@ def process_numeros(numeros, descricao):
     desvio_padrao_calculado = tstd(numeros)
     skewness = calcular_skew(numeros, media_calculada, desvio_padrao_calculado)
     kurt = calcular_kurtosis(numeros, media_calculada, desvio_padrao_calculado)
+    cov = covariancia(media_calculada, desvio_padrao_calculado)
 
     for item in tree.get_children():
         tree.delete(item)
@@ -370,6 +374,7 @@ def process_numeros(numeros, descricao):
     tree.insert('', 'end', values=('Média (calculada)', f"{media_calculada:.4f}"))
     tree.insert('', 'end', values=('Variância', f"{variancia:.4f}"))
     tree.insert('', 'end', values=('Desvio Padrão (calculado)', f"{desvio_padrao_calculado:.4f}"))
+    tree.insert('', 'end', values=('Covariância', f"{cov:.4f}"))
     tree.insert('', 'end', values=('Coeficiente de Skewness', f"{skewness:.4f}"))
     tree.insert('', 'end', values=('Coeficiente de Kurtosis', f"{kurt:.4f}"))
     
