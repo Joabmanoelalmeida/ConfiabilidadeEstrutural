@@ -79,15 +79,14 @@ def calcular_cdf_lognormal(numeros):
     return x, cdf
 
 def calcular_histograma_acumulativo(numeros, bins=None):
-    if bins is None:
-        bins = get_histogram_bins(numeros)
-    
-    hist, bin_edges = np.histogram(numeros, bins=bins)
-    hist_rel = hist / len(numeros)
-    cumulative = np.cumsum(hist_rel)
-    x = bin_edges
-    y = np.hstack([0, cumulative])
-    return x, y
+    data = np.array(numeros)
+    data = data[data > 0]
+    if len(data) == 0:
+        return None, None
+    sorted_data = np.sort(data)
+    n = len(sorted_data)
+    empirical_cdf = np.arange(1, n + 1) / n
+    return sorted_data, empirical_cdf
 
 def covariancia(media, desvio_padrao):
     return desvio_padrao / media
@@ -98,6 +97,7 @@ def teste_kolmogorov_smirnov(numeros, modelo='normal'):
 
     data = np.array(numeros)
     if modelo == 'lognormal':
+        # valores positivos para a distribuição
         data = data[data > 0]
         if len(data) == 0:
             return None
@@ -110,14 +110,14 @@ def teste_kolmogorov_smirnov(numeros, modelo='normal'):
         media = mean(data)
         std_dev = std(data)
         theoretical_cdf = norm.cdf(sorted_data, loc=media, scale=std_dev)
-    else:
-        logs = np.log(sorted_data)
+    else:  # modelo == 'lognormal'
+        logs = np.log(data)
         media_log = mean(logs)
-        media_original = mean(data)
         std_original = std(data)
+        media_original = mean(data)
         s = np.sqrt(np.log(1 + (std_original / media_original) ** 2))
         theoretical_cdf = lognorm.cdf(sorted_data, s=s, scale=np.exp(media_log))
-
+    
     differences = np.abs(empirical_cdf - theoretical_cdf)
     ks = np.max(differences)
     return ks
@@ -293,7 +293,6 @@ def salvar_funcao():
             x_max = sorted_data[idx_max]
             emp_val = empirical_cdf[idx_max]
             theo_val = theoretical_cdf[idx_max]
-            # Plota os pontos e a linha conectando-os
             ax_cdf.plot([x_max], [emp_val], marker='o', markersize=8, color='green', label='Empírica KS')
             ax_cdf.plot([x_max], [theo_val], marker='o', markersize=8, color='purple', label='Teórica KS')
             ax_cdf.plot([x_max, x_max], [emp_val, theo_val], color='black', linestyle='--', linewidth=2)
@@ -359,7 +358,7 @@ def plot_histograma_replot():
         ax.set_ylabel("Densidade")
         
         update_ks_test()
-  
+
     else:  # opcao == "CDF"
         try:
             bins = int(entry_bins_hist.get())
@@ -373,11 +372,11 @@ def plot_histograma_replot():
         x_hist, y_hist = calcular_histograma_acumulativo(last_numbers, bins)
         ax.step(x_hist, y_hist, where='post', color='blue', linewidth=2, label='Histograma Acumulativo')
         
-        # Cálculo dos pontos com maior diferença KS
+        # Cálculo dos pontos de maior diferença (KS)
         data = np.array(last_numbers)
         sorted_data = np.sort(data)
         n = len(sorted_data)
-        empirical_cdf = np.arange(1, n+1) / n
+        empirical_cdf = np.arange(1, n + 1) / n  
         if dist_type.get() == "normal":
             theoretical_cdf = norm.cdf(sorted_data, loc=mean(data), scale=std(data))
         else:
@@ -401,9 +400,9 @@ def plot_histograma_replot():
         ax.grid(True, linestyle='--', alpha=0.6)
 
     plt.tight_layout()
-    canvas = FigureCanvasTkAgg(fig, master=frame_plot_hist)
-    canvas.draw()
-    canvas.get_tk_widget().pack(fill="both", expand=True)
+    canvas_fig = FigureCanvasTkAgg(fig, master=frame_plot_hist)
+    canvas_fig.draw()
+    canvas_fig.get_tk_widget().pack(fill="both", expand=True)
 
 
 def process_numeros(numeros, descricao):
@@ -457,7 +456,6 @@ def gerar_numeros_aleatorios():
         tree.insert('', 'end', values=('Coeficiente de Skewness (Lognormal)', f"{skewness_log:.4f}"))
         tree.insert('', 'end', values=('Coeficiente de Kurtosis (Lognormal)', f"{kurt_log:.4f}"))
         
-        # Exibe o gráfico baseado na amostra normal (a opção de plot é controlada pelos botões de opção)
         last_numbers = numeros_normal
         plot_histograma_replot()
         
@@ -505,7 +503,6 @@ def gerar_amostra_selecionada():
         gerar_amostra_lognormal()
 
 def plot_current():
-    # Atualiza o gráfico conforme a opção selecionada
     if last_numbers is not None:
         plot_histograma_replot()
 
@@ -516,7 +513,7 @@ root.geometry("1500x700")
 frame_import = ttk.Frame(root, padding="10")
 frame_import.pack(side="top", fill="x")
 
-# Create a left frame that holds the "Abrir", import options and "Salvar" buttons
+# frame "Abrir" e "Salvar" 
 frame_open_side = ttk.Frame(frame_import)
 frame_open_side.pack(side="left", padx=1)
 
@@ -543,9 +540,6 @@ img_salvar = img_salvar.resize((40, 40), Image.Resampling.LANCZOS)
 photo_salvar = ImageTk.PhotoImage(img_salvar)
 
 def show_import_options():
-    # Toggle the visibility of the import options. In addition, reposition the "Salvar" button:
-    # Before clicking "Abrir", "Salvar" is packed on the right.
-    # When clicking "Abrir", it is repacked to the left, next to the Excel button.
     if frame_import_options.winfo_ismapped():
         frame_import_options.pack_forget()
         frame_salvar.pack_forget()
@@ -555,7 +549,7 @@ def show_import_options():
         frame_salvar.pack_forget()
         frame_salvar.pack(side="left", padx=10)
 
-# Frame for the "Abrir" button
+# Abrir
 frame_abrir = ttk.Frame(frame_open_side)
 frame_abrir.pack(side="left", padx=10)
 
@@ -566,7 +560,7 @@ btn_abrir.pack()
 lbl_abrir = ttk.Label(frame_abrir, text="Abrir", font=("Segoe UI", 11))
 lbl_abrir.pack()
 
-# Frame for import options (TXT and Excel), initially not packed
+# TXT e Excel
 frame_import_options = ttk.Frame(frame_open_side, padding="10")
 
 btn_txt = ttk.Button(frame_import_options, image=photo_txt, command=importar_txt)
@@ -577,7 +571,7 @@ btn_excel = ttk.Button(frame_import_options, image=photo_excel, command=importar
 btn_excel.image = photo_excel
 btn_excel.pack(side="left", padx=10)
 
-# Frame for the "Salvar" button.
+# "Salvar"
 frame_salvar = ttk.Frame(frame_open_side)
 
 btn_salvar = ttk.Button(frame_salvar, image=photo_salvar, command=salvar_funcao)
@@ -587,7 +581,7 @@ btn_salvar.pack()
 lbl_salvar = ttk.Label(frame_salvar, text="Salvar", font=("Segoe UI", 11))
 lbl_salvar.pack()
 
-# Initially, the "Salvar" option appears before clicking "Abrir" by being packed on the right.
+
 frame_salvar.pack(side="right", padx=10)
 
 style = ttk.Style(root)
@@ -761,9 +755,7 @@ button_plot_hist = ttk.Button(
     style="Accent.TButton"
 )
 button_plot_hist.grid(row=2, column=0, sticky="w", pady=(5, 15))
-# O botão "Atualizar Gráfico" agora permanece sempre visível.
 
-# Novos botões de opção para escolher entre PDF e CDF
 opcao_hist = tk.StringVar(value="PDF")
 lbl_plot_option = ttk.Label(frame_controls_hist, text="Visualização:")
 lbl_plot_option.grid(row=3, column=0, sticky="w", pady=(15, 5))
