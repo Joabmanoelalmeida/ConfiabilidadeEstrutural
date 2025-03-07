@@ -1,4 +1,4 @@
-from scipy.stats import norm, lognorm, weibull_min
+from scipy.stats import norm, lognorm, weibull_min, gamma, logistic
 import numpy as np
 from numpy import mean, var, std
 import tkinter as tk
@@ -45,7 +45,6 @@ def calcular_pdf_normal(numeros):
     return x, pdf
 
 def calcular_pdf_lognormal(numeros):
-    # Seleciona apenas os valores positivos (a distribuição lognormal é definida para x > 0)
     numeros_pos = [x for x in numeros if x > 0]
     if not numeros_pos:
         return None, None
@@ -116,6 +115,44 @@ def calcular_cdf_weibull(numeros):
     cdf = weibull_min.cdf(x, c, loc=0, scale=scale)
     return x, cdf
 
+def calcular_pdf_gamma(numeros):
+    numeros_pos = [x for x in numeros if x > 0]
+    if not numeros_pos:
+        return None, None
+    params = gamma.fit(numeros_pos, floc=0)
+    a, loc, scale = params
+    x = np.linspace(min(numeros_pos), max(numeros_pos), 200)
+    pdf = gamma.pdf(x, a, loc=loc, scale=scale)
+    return x, pdf
+
+def calcular_cdf_gamma(numeros):
+    numeros_pos = [x for x in numeros if x > 0]
+    if not numeros_pos:
+        return None, None
+    params = gamma.fit(numeros_pos, floc=0)
+    a, loc, scale = params
+    x = np.linspace(min(numeros_pos), max(numeros_pos), 200)
+    cdf = gamma.cdf(x, a, loc=loc, scale=scale)
+    return x, cdf
+
+def calcular_pdf_logistic(numeros):
+    if not numeros:
+        return None, None
+    params = logistic.fit(numeros)
+    loc, scale = params[0], params[1]
+    x = np.linspace(min(numeros), max(numeros), 200)
+    pdf = logistic.pdf(x, loc=loc, scale=scale)
+    return x, pdf
+
+def calcular_cdf_logistic(numeros):
+    if not numeros:
+        return None, None
+    params = logistic.fit(numeros)
+    loc, scale = params[0], params[1]
+    x = np.linspace(min(numeros), max(numeros), 200)
+    cdf = logistic.cdf(x, loc=loc, scale=scale)
+    return x, cdf
+
 def calcular_histograma_acumulativo(numeros, bins=None):
     data = np.array(numeros)
     data = data[data > 0]
@@ -134,7 +171,7 @@ def teste_kolmogorov_smirnov(numeros, modelo='normal'):
         return None
 
     data = np.array(numeros)
-    if modelo in ['lognormal', 'exponencial', 'weibull']:
+    if modelo in ['lognormal', 'exponencial', 'weibull min', 'gamma', 'logistic']:
         data = data[data > 0]
         if len(data) == 0:
             return None
@@ -150,18 +187,28 @@ def teste_kolmogorov_smirnov(numeros, modelo='normal'):
     elif modelo == 'lognormal':
         logs = np.log(data)
         media_log = mean(logs)
-        # Utiliza o parâmetro s obtido a partir dos dados originais
         std_original = std(data)
         theoretical_cdf = lognorm.cdf(sorted_data, s=np.sqrt(np.log(1 + (std_original / mean(data)) ** 2)),
                                       scale=np.exp(media_log))
     elif modelo == 'exponencial':
         scale = mean(data)
         theoretical_cdf = 1 - np.exp(-sorted_data / scale)
-    elif modelo == 'weibull':
+    elif modelo == 'weibull min':
         params = weibull_min.fit(data, floc=0)
-        c = params[0]
+        c_val = params[0]
         scale_fit = params[2]
-        theoretical_cdf = weibull_min.cdf(sorted_data, c, loc=0, scale=scale_fit)
+        theoretical_cdf = weibull_min.cdf(sorted_data, c_val, loc=0, scale=scale_fit)
+    elif modelo == 'gamma':
+        params = gamma.fit(data, floc=0)
+        a, loc_val, scale_val = params
+        theoretical_cdf = gamma.cdf(sorted_data, a, loc=loc_val, scale=scale_val)
+    elif modelo == 'logistic':
+        params = logistic.fit(data)
+        loc_val, scale_val = params[0], params[1]
+        theoretical_cdf = logistic.cdf(sorted_data, loc=loc_val, scale=scale_val)
+    else:
+        return None
+
     differences = np.abs(empirical_cdf - theoretical_cdf)
     ks = np.max(differences)
     return ks
@@ -309,8 +356,12 @@ def salvar_funcao():
                 x_pdf, pdf_values = calcular_pdf_lognormal(last_numbers)
             elif dist_type.get() == "exponencial":
                 x_pdf, pdf_values = calcular_pdf_exponencial(last_numbers)
-            elif dist_type.get() == "weibull":
+            elif dist_type.get() == "weibull min":
                 x_pdf, pdf_values = calcular_pdf_weibull(last_numbers)
+            elif dist_type.get() == "gamma":
+                x_pdf, pdf_values = calcular_pdf_gamma(last_numbers)
+            elif dist_type.get() == "logistic":
+                x_pdf, pdf_values = calcular_pdf_logistic(last_numbers)
             ax_pdf.plot(x_pdf, pdf_values, color='red', linewidth=2, label='PDF')
             ax_pdf.legend()
             ax_pdf.set_title("Histograma de Densidade de Probabilidade (PDF)")
@@ -330,8 +381,12 @@ def salvar_funcao():
                 x_cdf, cdf_values = calcular_cdf_lognormal(last_numbers)
             elif dist_type.get() == "exponencial":
                 x_cdf, cdf_values = calcular_cdf_exponencial(last_numbers)
-            elif dist_type.get() == "weibull":
+            elif dist_type.get() == "weibull min":
                 x_cdf, cdf_values = calcular_cdf_weibull(last_numbers)
+            elif dist_type.get() == "gamma":
+                x_cdf, cdf_values = calcular_cdf_gamma(last_numbers)
+            elif dist_type.get() == "logistic":
+                x_cdf, cdf_values = calcular_cdf_logistic(last_numbers)
             ax_cdf.plot(x_cdf, cdf_values, color='red', linewidth=2, label='CDF')
             x_hist, y_hist = calcular_histograma_acumulativo(last_numbers, bins)
             ax_cdf.step(x_hist, y_hist, where='post', color='blue', linewidth=2, label='Histograma Acumulativo')
@@ -350,11 +405,26 @@ def salvar_funcao():
             elif dist_type.get() == "exponencial":
                 scale = mean(data)
                 theoretical_cdf = 1 - np.exp(-sorted_data / scale)
-            elif dist_type.get() == "weibull":
+            elif dist_type.get() == "weibull min":
                 params = weibull_min.fit(data, floc=0)
                 c_val = params[0]
                 scale_fit = params[2]
                 theoretical_cdf = weibull_min.cdf(sorted_data, c_val, loc=0, scale=scale_fit)
+            elif dist_type.get() == "gamma":
+                data_gamma = data[data > 0]
+                if len(data_gamma) == 0:
+                    theoretical_cdf = np.zeros_like(sorted_data)
+                else:
+                    sorted_data = np.sort(data_gamma)
+                    n = len(sorted_data)
+                    empirical_cdf = np.arange(1, n + 1) / n
+                    params = gamma.fit(data_gamma, floc=0)
+                    a, loc_val, scale_val = params
+                    theoretical_cdf = gamma.cdf(sorted_data, a, loc=loc_val, scale=scale_val)
+            elif dist_type.get() == "logistic":
+                params = logistic.fit(data)
+                loc_val, scale_val = params[0], params[1]
+                theoretical_cdf = logistic.cdf(sorted_data, loc=loc_val, scale=scale_val)
             differences = np.abs(empirical_cdf - theoretical_cdf)
             idx_max = np.argmax(differences)
             x_max = sorted_data[idx_max]
@@ -420,8 +490,12 @@ def plot_histograma_replot():
             x, pdf = calcular_pdf_lognormal(last_numbers)
         elif dist_type.get() == "exponencial":
             x, pdf = calcular_pdf_exponencial(last_numbers)
-        elif dist_type.get() == "weibull":
+        elif dist_type.get() == "weibull min":
             x, pdf = calcular_pdf_weibull(last_numbers)
+        elif dist_type.get() == "gamma":
+            x, pdf = calcular_pdf_gamma(last_numbers)
+        elif dist_type.get() == "logistic":
+            x, pdf = calcular_pdf_logistic(last_numbers)
         ax.plot(x, pdf, color='red', linewidth=2, label='PDF')
         ax.legend()
         ax.set_title("Histograma de Densidade de Probabilidade (PDF)")
@@ -441,8 +515,12 @@ def plot_histograma_replot():
             x, cdf_values = calcular_cdf_lognormal(last_numbers)
         elif dist_type.get() == "exponencial":
             x, cdf_values = calcular_cdf_exponencial(last_numbers)
-        elif dist_type.get() == "weibull":
+        elif dist_type.get() == "weibull min":
             x, cdf_values = calcular_cdf_weibull(last_numbers)
+        elif dist_type.get() == "gamma":
+            x, cdf_values = calcular_cdf_gamma(last_numbers)
+        elif dist_type.get() == "logistic":
+            x, cdf_values = calcular_cdf_logistic(last_numbers)
         ax.plot(x, cdf_values, color='red', linewidth=2, label='CDF')
         x_hist, y_hist = calcular_histograma_acumulativo(last_numbers, bins)
         ax.step(x_hist, y_hist, where='post', color='blue', linewidth=2, label='Histograma Acumulativo')
@@ -460,11 +538,19 @@ def plot_histograma_replot():
         elif dist_type.get() == "exponencial":
             scale = mean(data)
             theoretical_cdf = 1 - np.exp(-sorted_data / scale)
-        elif dist_type.get() == "weibull":
+        elif dist_type.get() == "weibull min":
             params = weibull_min.fit(data, floc=0)
             c_val = params[0]
             scale_fit = params[2]
             theoretical_cdf = weibull_min.cdf(sorted_data, c_val, loc=0, scale=scale_fit)
+        elif dist_type.get() == "gamma":
+            params = gamma.fit(data, floc=0)
+            a, loc_val, scale_val = params
+            theoretical_cdf = gamma.cdf(sorted_data, a, loc=loc_val, scale=scale_val)
+        elif dist_type.get() == "logistic":
+            params = logistic.fit(data)
+            loc_val, scale_val = params[0], params[1]
+            theoretical_cdf = logistic.cdf(sorted_data, loc=loc_val, scale=scale_val)
         differences = np.abs(empirical_cdf - theoretical_cdf)
         idx_max = np.argmax(differences)
         x_max = sorted_data[idx_max]
@@ -557,7 +643,35 @@ def gerar_amostra_weibull():
         shape = float(entry_desvio.get()) if entry_desvio.get() else 1  
         scale = float(entry_media.get()) if entry_media.get() else 1  
         numeros_weibull = (scale * np.random.weibull(shape, quantidade)).tolist()
-        process_numeros(numeros_weibull, "Números gerados (Weibull)")
+        process_numeros(numeros_weibull, "Números gerados (Weibull min)")
+    except ValueError:
+        for item in tree.get_children():
+            tree.delete(item)
+        tree.insert('', 'end', values=('Erro', 'Insira números válidos.'))
+        for widget in frame_plot_hist.winfo_children():
+            widget.destroy()
+
+def gerar_amostra_gama():
+    try:
+        quantidade = int(entry_quantidade.get())
+        forma = float(entry_desvio.get()) if entry_desvio.get() else 1  
+        escala = float(entry_media.get()) if entry_media.get() else 1  
+        numeros_gama = gamma.rvs(forma, loc=0, scale=escala, size=quantidade).tolist()
+        process_numeros(numeros_gama, "Números gerados (Gamma)")
+    except ValueError:
+        for item in tree.get_children():
+            tree.delete(item)
+        tree.insert('', 'end', values=('Erro', 'Insira números válidos.'))
+        for widget in frame_plot_hist.winfo_children():
+            widget.destroy()
+
+def gerar_amostra_logistic():
+    try:
+        quantidade = int(entry_quantidade.get())
+        locacao = float(entry_media.get()) if entry_media.get() else 0  
+        escala = float(entry_desvio.get()) if entry_desvio.get() else 1  
+        numeros_logistic = logistic.rvs(loc=locacao, scale=escala, size=quantidade).tolist()
+        process_numeros(numeros_logistic, "Números gerados (Logistic)")
     except ValueError:
         for item in tree.get_children():
             tree.delete(item)
@@ -572,8 +686,12 @@ def gerar_amostra_selecionada():
         gerar_amostra_lognormal()
     elif dist_type.get() == "exponencial":
         gerar_amostra_exponencial()
-    elif dist_type.get() == "weibull":
+    elif dist_type.get() == "weibull min":
         gerar_amostra_weibull()
+    elif dist_type.get() == "gamma":
+        gerar_amostra_gama()
+    elif dist_type.get() == "logistic":
+        gerar_amostra_logistic()
 
 def plot_current():
     if last_numbers is not None:
@@ -710,17 +828,35 @@ radio_exponencial.grid(row=3, column=0, sticky="w", pady=(0, 5))
 
 radio_weibull = ttk.Radiobutton(
     frame_controles,
-    text="Weibull",
-    value="weibull",
+    text="Weibull min",
+    value="weibull min",
     variable=dist_type,
     style="TRadiobutton"
 )
-radio_weibull.grid(row=4, column=0, sticky="w", pady=(0, 15))
+radio_weibull.grid(row=4, column=0, sticky="w", pady=(0, 5))
+
+radio_gamma = ttk.Radiobutton(
+    frame_controles,
+    text="Gamma",
+    value="gamma",
+    variable=dist_type,
+    style="TRadiobutton"
+)
+radio_gamma.grid(row=5, column=0, sticky="w", pady=(0, 5))
+
+radio_logistic = ttk.Radiobutton(
+    frame_controles,
+    text="Logistic",
+    value="logistic",
+    variable=dist_type,
+    style="TRadiobutton"
+)
+radio_logistic.grid(row=6, column=0, sticky="w", pady=(0, 15))
 
 var_parametros = tk.BooleanVar(value=False)
 def toggle_quantidade():
     if var_parametros.get():
-        frame_quantidade.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(0, 15))
+        frame_quantidade.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(0, 15))
     else:
         frame_quantidade.grid_forget()
 
@@ -748,74 +884,6 @@ label_desvio = ttk.Label(frame_quantidade, text="Desvio/Shape:", style="TLabel")
 label_desvio.grid(row=2, column=0, sticky="w", pady=(0, 3))
 entry_desvio = ttk.Entry(frame_quantidade, width=10, font=("Segoe UI", 9))
 entry_desvio.grid(row=2, column=1, sticky="ew", padx=(5, 0), pady=(0, 10))
-
-def gerar_amostra_normal():
-    try:
-        quantidade = int(entry_quantidade.get())
-        media_informada = float(entry_media.get()) if entry_media.get() else 0  
-        desvio_informado = float(entry_desvio.get()) if entry_desvio.get() else 1
-        
-        numeros_normal = norm.rvs(loc=media_informada, scale=desvio_informado, size=quantidade).tolist()
-        process_numeros(numeros_normal, "Números gerados (Normal)")
-    except ValueError:
-        for item in tree.get_children():
-            tree.delete(item)
-        tree.insert('', 'end', values=('Erro', 'Insira números válidos.'))
-        for widget in frame_plot_hist.winfo_children():
-            widget.destroy()
-
-def gerar_amostra_lognormal():
-    try:
-        quantidade = int(entry_quantidade.get())
-        media_informada = float(entry_media.get()) if entry_media.get() else 0  
-        desvio_informado = float(entry_desvio.get()) if entry_desvio.get() else 1
-        
-        numeros_lognormal = lognorm.rvs(s=desvio_informado, scale=np.exp(media_informada), size=quantidade).tolist()
-        process_numeros(numeros_lognormal, "Números gerados (Lognormal)")
-    except ValueError:
-        for item in tree.get_children():
-            tree.delete(item)
-        tree.insert('', 'end', values=('Erro', 'Insira números válidos.'))
-        for widget in frame_plot_hist.winfo_children():
-            widget.destroy()
-
-def gerar_amostra_exponencial():
-    try:
-        quantidade = int(entry_quantidade.get())
-        # Na distribuição exponencial, a "média" é o parâmetro scale (λ = 1/scale)
-        media_informada = float(entry_media.get()) if entry_media.get() else 1  
-        numeros_exponencial = np.random.exponential(scale=media_informada, size=quantidade).tolist()
-        process_numeros(numeros_exponencial, "Números gerados (Exponencial)")
-    except ValueError:
-        for item in tree.get_children():
-            tree.delete(item)
-        tree.insert('', 'end', values=('Erro', 'Insira números válidos.'))
-        for widget in frame_plot_hist.winfo_children():
-            widget.destroy()
-
-def gerar_amostra_weibull():
-    try:
-        quantidade = int(entry_quantidade.get())
-        shape = float(entry_desvio.get()) if entry_desvio.get() else 1  
-        scale = float(entry_media.get()) if entry_media.get() else 1  
-        numeros_weibull = (scale * np.random.weibull(shape, quantidade)).tolist()
-        process_numeros(numeros_weibull, "Números gerados (Weibull)")
-    except ValueError:
-        for item in tree.get_children():
-            tree.delete(item)
-        tree.insert('', 'end', values=('Erro', 'Insira números válidos.'))
-        for widget in frame_plot_hist.winfo_children():
-            widget.destroy()
-
-def gerar_amostra_selecionada():
-    if dist_type.get() == "normal":
-        gerar_amostra_normal()
-    elif dist_type.get() == "lognormal":
-        gerar_amostra_lognormal()
-    elif dist_type.get() == "exponencial":
-        gerar_amostra_exponencial()
-    elif dist_type.get() == "weibull":
-        gerar_amostra_weibull()
 
 button_calcular = ttk.Button(
     frame_controles,
