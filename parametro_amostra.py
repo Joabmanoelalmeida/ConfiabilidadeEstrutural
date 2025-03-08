@@ -1,4 +1,4 @@
-from scipy.stats import norm, lognorm, weibull_min, gamma, logistic
+from scipy.stats import norm, lognorm, weibull_min, gamma, logistic, kurtosis, skew
 import numpy as np
 from numpy import mean, var, std
 import tkinter as tk
@@ -16,16 +16,6 @@ import tempfile
 import os
 
 last_numbers = None
-
-def calcular_skew(numeros, media, desvio_padrao):
-    quantidade = len(numeros)
-    skew = (1 / (quantidade * desvio_padrao**3)) * sum((x - media)**3 for x in numeros)
-    return skew
-
-def calcular_kurtosis(numeros, media, desvio_padrao):
-    quantidade = len(numeros)
-    kurt = (1 / (quantidade * desvio_padrao**4)) * sum((x - media)**4 for x in numeros)
-    return kurt
 
 def get_histogram_bins(numeros):
     n = len(numeros)
@@ -576,8 +566,8 @@ def process_numeros(numeros, descricao):
     media_calculada = mean(numeros)
     variancia = var(numeros)
     desvio_padrao_calculado = std(numeros)
-    skewness = calcular_skew(numeros, media_calculada, desvio_padrao_calculado)
-    kurt = calcular_kurtosis(numeros, media_calculada, desvio_padrao_calculado)
+    skewness = skew(numeros)
+    kurt = kurtosis(numeros)
     cov = covariancia(media_calculada, desvio_padrao_calculado)
 
     for item in tree.get_children():
