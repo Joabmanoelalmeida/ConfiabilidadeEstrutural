@@ -1,4 +1,4 @@
-from scipy.stats import norm, lognorm, weibull_min, gamma, logistic, kurtosis, skew
+from scipy.stats import norm, lognorm, weibull_min, gamma, logistic, kurtosis, skew, rayleigh, gumbel_r
 import numpy as np
 from numpy import mean, var, std
 import tkinter as tk
@@ -143,8 +143,45 @@ def calcular_cdf_logistic(numeros):
     cdf = logistic.cdf(x, loc=loc, scale=scale)
     return x, cdf
 
+def calcular_pdf_rayleigh(numeros):
+    if not numeros:
+        return None, None
+    params = rayleigh.fit(numeros)
+    loc, scale = params[0], params[1]
+    x = np.linspace(min(numeros), max(numeros), 200)
+    pdf = rayleigh.pdf(x, loc=loc, scale=scale)
+    return x, pdf
+
+def calcular_cdf_rayleigh(numeros):
+    if not numeros:
+        return None, None
+    params = rayleigh.fit(numeros)
+    loc, scale = params[0], params[1]
+    x = np.linspace(min(numeros), max(numeros), 200)
+    cdf = rayleigh.cdf(x, loc=loc, scale=scale)
+    return x, cdf
+
+def calcular_pdf_gumbel(numeros):
+    if not numeros:
+        return None, None
+    params = gumbel_r.fit(numeros)
+    loc, scale = params[0], params[1]
+    x = np.linspace(min(numeros), max(numeros), 200)
+    pdf = gumbel_r.pdf(x, loc=loc, scale=scale)
+    return x, pdf
+
+def calcular_cdf_gumbel(numeros):
+    if not numeros:
+        return None, None
+    params = gumbel_r.fit(numeros)
+    loc, scale = params[0], params[1]
+    x = np.linspace(min(numeros), max(numeros), 200)
+    cdf = gumbel_r.cdf(x, loc=loc, scale=scale)
+    return x, cdf
+
 def calcular_histograma_acumulativo(numeros, bins=None):
     data = np.array(numeros)
+    # Para histogramas acumulativos, processa apenas valores positivos (para compatibilidade com outras distribuições)
     data = data[data > 0]
     if len(data) == 0:
         return None, None
@@ -161,7 +198,8 @@ def teste_kolmogorov_smirnov(numeros, modelo='normal'):
         return None
 
     data = np.array(numeros)
-    if modelo in ['lognormal', 'exponencial', 'weibull min', 'gamma', 'logistic']:
+    # Para alguns modelos, considera somente valores positivos
+    if modelo in ['lognormal', 'exponencial', 'weibull min', 'gamma', 'logistic', 'rayleigh', 'gumbel']:
         data = data[data > 0]
         if len(data) == 0:
             return None
@@ -196,6 +234,14 @@ def teste_kolmogorov_smirnov(numeros, modelo='normal'):
         params = logistic.fit(data)
         loc_val, scale_val = params[0], params[1]
         theoretical_cdf = logistic.cdf(sorted_data, loc=loc_val, scale=scale_val)
+    elif modelo == 'rayleigh':
+        params = rayleigh.fit(data)
+        loc_val, scale_val = params[0], params[1]
+        theoretical_cdf = rayleigh.cdf(sorted_data, loc=loc_val, scale=scale_val)
+    elif modelo == 'gumbel':
+        params = gumbel_r.fit(data)
+        loc_val, scale_val = params[0], params[1]
+        theoretical_cdf = gumbel_r.cdf(sorted_data, loc=loc_val, scale=scale_val)
     else:
         return None
 
@@ -352,6 +398,10 @@ def salvar_funcao():
                 x_pdf, pdf_values = calcular_pdf_gamma(last_numbers)
             elif dist_type.get() == "logistic":
                 x_pdf, pdf_values = calcular_pdf_logistic(last_numbers)
+            elif dist_type.get() == "rayleigh":
+                x_pdf, pdf_values = calcular_pdf_rayleigh(last_numbers)
+            elif dist_type.get() == "gumbel":
+                x_pdf, pdf_values = calcular_pdf_gumbel(last_numbers)
             ax_pdf.plot(x_pdf, pdf_values, color='red', linewidth=2, label='PDF')
             ax_pdf.legend()
             ax_pdf.set_title("Histograma de Densidade de Probabilidade (PDF)")
@@ -377,6 +427,10 @@ def salvar_funcao():
                 x_cdf, cdf_values = calcular_cdf_gamma(last_numbers)
             elif dist_type.get() == "logistic":
                 x_cdf, cdf_values = calcular_cdf_logistic(last_numbers)
+            elif dist_type.get() == "rayleigh":
+                x_cdf, cdf_values = calcular_cdf_rayleigh(last_numbers)
+            elif dist_type.get() == "gumbel":
+                x_cdf, cdf_values = calcular_cdf_gumbel(last_numbers)
             ax_cdf.plot(x_cdf, cdf_values, color='red', linewidth=2, label='CDF')
             x_hist, y_hist = calcular_histograma_acumulativo(last_numbers, bins)
             ax_cdf.step(x_hist, y_hist, where='post', color='blue', linewidth=2, label='Histograma Acumulativo')
@@ -415,6 +469,14 @@ def salvar_funcao():
                 params = logistic.fit(data)
                 loc_val, scale_val = params[0], params[1]
                 theoretical_cdf = logistic.cdf(sorted_data, loc=loc_val, scale=scale_val)
+            elif dist_type.get() == "rayleigh":
+                params = rayleigh.fit(data)
+                loc_val, scale_val = params[0], params[1]
+                theoretical_cdf = rayleigh.cdf(sorted_data, loc=loc_val, scale=scale_val)
+            elif dist_type.get() == "gumbel":
+                params = gumbel_r.fit(data)
+                loc_val, scale_val = params[0], params[1]
+                theoretical_cdf = gumbel_r.cdf(sorted_data, loc=loc_val, scale=scale_val)
             differences = np.abs(empirical_cdf - theoretical_cdf)
             idx_max = np.argmax(differences)
             x_max = sorted_data[idx_max]
@@ -486,6 +548,10 @@ def plot_histograma_replot():
             x, pdf = calcular_pdf_gamma(last_numbers)
         elif dist_type.get() == "logistic":
             x, pdf = calcular_pdf_logistic(last_numbers)
+        elif dist_type.get() == "rayleigh":
+            x, pdf = calcular_pdf_rayleigh(last_numbers)
+        elif dist_type.get() == "gumbel":
+            x, pdf = calcular_pdf_gumbel(last_numbers)
         ax.plot(x, pdf, color='red', linewidth=2, label='PDF')
         ax.legend()
         ax.set_title("Histograma de Densidade de Probabilidade (PDF)")
@@ -511,6 +577,10 @@ def plot_histograma_replot():
             x, cdf_values = calcular_cdf_gamma(last_numbers)
         elif dist_type.get() == "logistic":
             x, cdf_values = calcular_cdf_logistic(last_numbers)
+        elif dist_type.get() == "rayleigh":
+            x, cdf_values = calcular_cdf_rayleigh(last_numbers)
+        elif dist_type.get() == "gumbel":
+            x, cdf_values = calcular_cdf_gumbel(last_numbers)
         ax.plot(x, cdf_values, color='red', linewidth=2, label='CDF')
         x_hist, y_hist = calcular_histograma_acumulativo(last_numbers, bins)
         ax.step(x_hist, y_hist, where='post', color='blue', linewidth=2, label='Histograma Acumulativo')
@@ -541,6 +611,14 @@ def plot_histograma_replot():
             params = logistic.fit(data)
             loc_val, scale_val = params[0], params[1]
             theoretical_cdf = logistic.cdf(sorted_data, loc=loc_val, scale=scale_val)
+        elif dist_type.get() == "rayleigh":
+            params = rayleigh.fit(data)
+            loc_val, scale_val = params[0], params[1]
+            theoretical_cdf = rayleigh.cdf(sorted_data, loc=loc_val, scale=scale_val)
+        elif dist_type.get() == "gumbel":
+            params = gumbel_r.fit(data)
+            loc_val, scale_val = params[0], params[1]
+            theoretical_cdf = gumbel_r.cdf(sorted_data, loc=loc_val, scale=scale_val)
         differences = np.abs(empirical_cdf - theoretical_cdf)
         idx_max = np.argmax(differences)
         x_max = sorted_data[idx_max]
@@ -669,6 +747,34 @@ def gerar_amostra_logistic():
         for widget in frame_plot_hist.winfo_children():
             widget.destroy()
 
+def gerar_amostra_rayleigh():
+    try:
+        quantidade = int(entry_quantidade.get())
+        locacao = float(entry_media.get()) if entry_media.get() else 0  
+        escala = float(entry_desvio.get()) if entry_desvio.get() else 1  
+        numeros_rayleigh = rayleigh.rvs(loc=locacao, scale=escala, size=quantidade).tolist()
+        process_numeros(numeros_rayleigh, "Números gerados (Rayleigh)")
+    except ValueError:
+        for item in tree.get_children():
+            tree.delete(item)
+        tree.insert('', 'end', values=('Erro', 'Insira números válidos.'))
+        for widget in frame_plot_hist.winfo_children():
+            widget.destroy()
+
+def gerar_amostra_gumbel():
+    try:
+        quantidade = int(entry_quantidade.get())
+        locacao = float(entry_media.get()) if entry_media.get() else 0  
+        escala = float(entry_desvio.get()) if entry_desvio.get() else 1  
+        numeros_gumbel = gumbel_r.rvs(loc=locacao, scale=escala, size=quantidade).tolist()
+        process_numeros(numeros_gumbel, "Números gerados (Gumbel)")
+    except ValueError:
+        for item in tree.get_children():
+            tree.delete(item)
+        tree.insert('', 'end', values=('Erro', 'Insira números válidos.'))
+        for widget in frame_plot_hist.winfo_children():
+            widget.destroy()
+
 def gerar_amostra_selecionada():
     if dist_type.get() == "normal":
         gerar_amostra_normal()
@@ -682,6 +788,10 @@ def gerar_amostra_selecionada():
         gerar_amostra_gama()
     elif dist_type.get() == "logistic":
         gerar_amostra_logistic()
+    elif dist_type.get() == "rayleigh":
+        gerar_amostra_rayleigh()
+    elif dist_type.get() == "gumbel":
+        gerar_amostra_gumbel()
 
 def plot_current():
     if last_numbers is not None:
@@ -843,10 +953,28 @@ radio_logistic = ttk.Radiobutton(
 )
 radio_logistic.grid(row=6, column=0, sticky="w", pady=(0, 15))
 
+radio_rayleigh = ttk.Radiobutton(
+    frame_controles,
+    text="Rayleigh",
+    value="rayleigh",
+    variable=dist_type,
+    style="TRadiobutton"
+)
+radio_rayleigh.grid(row=7, column=0, sticky="w", pady=(0, 5))
+
+radio_gumbel = ttk.Radiobutton(
+    frame_controles,
+    text="Gumbel",
+    value="gumbel",
+    variable=dist_type,
+    style="TRadiobutton"
+)
+radio_gumbel.grid(row=8, column=0, sticky="w", pady=(0, 5))
+
 var_parametros = tk.BooleanVar(value=False)
 def toggle_quantidade():
     if var_parametros.get():
-        frame_quantidade.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(0, 15))
+        frame_quantidade.grid(row=9, column=0, columnspan=2, sticky="ew", pady=(0, 15))
     else:
         frame_quantidade.grid_forget()
 
@@ -865,12 +993,12 @@ label_quantidade.grid(row=0, column=0, sticky="w", pady=(0, 3))
 entry_quantidade = ttk.Entry(frame_quantidade, width=10, font=("Segoe UI", 9))
 entry_quantidade.grid(row=0, column=1, sticky="ew", padx=(5, 0), pady=(0, 10))
 
-label_media = ttk.Label(frame_quantidade, text="Média/Scale:", style="TLabel")
+label_media = ttk.Label(frame_quantidade, text="Média:", style="TLabel")
 label_media.grid(row=1, column=0, sticky="w", pady=(0, 3))
 entry_media = ttk.Entry(frame_quantidade, width=10, font=("Segoe UI", 9))
 entry_media.grid(row=1, column=1, sticky="ew", padx=(5, 0), pady=(0, 10))
 
-label_desvio = ttk.Label(frame_quantidade, text="Desvio/Shape:", style="TLabel")
+label_desvio = ttk.Label(frame_quantidade, text="Desvio padrão:", style="TLabel")
 label_desvio.grid(row=2, column=0, sticky="w", pady=(0, 3))
 entry_desvio = ttk.Entry(frame_quantidade, width=10, font=("Segoe UI", 9))
 entry_desvio.grid(row=2, column=1, sticky="ew", padx=(5, 0), pady=(0, 10))
@@ -881,7 +1009,7 @@ button_calcular = ttk.Button(
     command=gerar_amostra_selecionada,
     style="Accent.TButton"
 )
-button_calcular.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(5, 15))
+button_calcular.grid(row=10, column=0, columnspan=2, sticky="ew", pady=(20, 15))
 
 frame_quantidade.grid_forget()
 
